@@ -1,0 +1,75 @@
+"""Point d'entrée CLI pour Compas."""
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+
+def _setup_logging(verbose: bool = False) -> None:
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+
+
+def _cmd_import(args: argparse.Namespace) -> int:
+    from compas.importer import import_all
+
+    try:
+        import_all(Path(args.data), Path(args.db))
+    except ValueError as exc:
+        logging.getLogger(__name__).error("%s", exc)
+        return 1
+    return 0
+
+
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    logging.getLogger(__name__).error("Commande 'dashboard' non encore implémentée")
+    return 1
+
+
+def _cmd_build(args: argparse.Namespace) -> int:
+    rc = _cmd_import(args)
+    if rc != 0:
+        return rc
+    return _cmd_dashboard(args)
+
+
+def main() -> None:
+    """Point d'entrée principal du CLI Compas."""
+    parser = argparse.ArgumentParser(
+        prog="compas",
+        description="Évaluation continue des soft skills — BTS SIO SISR",
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Mode verbeux")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    # Sous-commande : import
+    p_import = sub.add_parser("import", help="Importer les fichiers xlsx dans la base SQLite")
+    p_import.add_argument("--data", required=True, metavar="DIR", help="Dossier des fichiers xlsx")
+    p_import.add_argument("--db", required=True, metavar="FILE", help="Chemin de la base SQLite")
+    p_import.set_defaults(func=_cmd_import)
+
+    # Sous-commande : dashboard
+    p_dash = sub.add_parser("dashboard", help="Générer le dashboard HTML")
+    p_dash.add_argument("--db", required=True, metavar="FILE", help="Chemin de la base SQLite")
+    p_dash.add_argument("--out", required=True, metavar="FILE", help="Fichier HTML de sortie")
+    p_dash.set_defaults(func=_cmd_dashboard)
+
+    # Sous-commande : build (import + dashboard)
+    p_build = sub.add_parser("build", help="Importer puis générer le dashboard")
+    p_build.add_argument("--data", required=True, metavar="DIR", help="Dossier des fichiers xlsx")
+    p_build.add_argument("--db", required=True, metavar="FILE", help="Chemin de la base SQLite")
+    p_build.add_argument("--out", required=True, metavar="FILE", help="Fichier HTML de sortie")
+    p_build.set_defaults(func=_cmd_build)
+
+    args = parser.parse_args()
+    _setup_logging(args.verbose)
+    sys.exit(args.func(args))
+
+
+if __name__ == "__main__":
+    main()
