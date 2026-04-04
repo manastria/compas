@@ -27,8 +27,14 @@ def _cmd_import(args: argparse.Namespace) -> int:
 
 
 def _cmd_dashboard(args: argparse.Namespace) -> int:
-    logging.getLogger(__name__).error("Commande 'dashboard' non encore implémentée")
-    return 1
+    from compas.dashboard import generate
+
+    try:
+        generate(Path(args.db), Path(args.out), alpha=args.alpha)
+    except (FileNotFoundError, ValueError) as exc:
+        logging.getLogger(__name__).error("%s", exc)
+        return 1
+    return 0
 
 
 def _cmd_build(args: argparse.Namespace) -> int:
@@ -57,6 +63,10 @@ def main() -> None:
     p_dash = sub.add_parser("dashboard", help="Générer le dashboard HTML")
     p_dash.add_argument("--db", required=True, metavar="FILE", help="Chemin de la base SQLite")
     p_dash.add_argument("--out", required=True, metavar="FILE", help="Fichier HTML de sortie")
+    p_dash.add_argument(
+        "--alpha", type=float, default=0.4, metavar="ALPHA",
+        help="Coefficient de lissage EMA (défaut : 0.4)",
+    )
     p_dash.set_defaults(func=_cmd_dashboard)
 
     # Sous-commande : build (import + dashboard)
@@ -64,6 +74,10 @@ def main() -> None:
     p_build.add_argument("--data", required=True, metavar="DIR", help="Dossier des fichiers xlsx")
     p_build.add_argument("--db", required=True, metavar="FILE", help="Chemin de la base SQLite")
     p_build.add_argument("--out", required=True, metavar="FILE", help="Fichier HTML de sortie")
+    p_build.add_argument(
+        "--alpha", type=float, default=0.4, metavar="ALPHA",
+        help="Coefficient de lissage EMA (défaut : 0.4)",
+    )
     p_build.set_defaults(func=_cmd_build)
 
     args = parser.parse_args()
