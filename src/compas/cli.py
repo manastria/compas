@@ -18,9 +18,17 @@ def _setup_logging(verbose: bool = False) -> None:
 def _cmd_import(args: argparse.Namespace) -> int:
     from compas.importer import import_all
 
+    data_dir = Path(args.data)
+    if not data_dir.exists():
+        logging.getLogger(__name__).error("Répertoire introuvable : %s", data_dir)
+        return 1
+    if not data_dir.is_dir():
+        logging.getLogger(__name__).error("N'est pas un répertoire : %s", data_dir)
+        return 1
+
     try:
-        import_all(Path(args.data), Path(args.db))
-    except ValueError as exc:
+        import_all(data_dir, Path(args.db))
+    except (ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
         return 1
     return 0
@@ -29,11 +37,17 @@ def _cmd_import(args: argparse.Namespace) -> int:
 def _cmd_dashboard(args: argparse.Namespace) -> int:
     from compas.dashboard import generate
 
+    out = Path(args.out)
     try:
-        generate(Path(args.db), Path(args.out), alpha=args.alpha)
-    except (FileNotFoundError, ValueError) as exc:
+        generate(Path(args.db), out, alpha=args.alpha)
+    except (FileNotFoundError, ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
         return 1
+
+    if getattr(args, "open_browser", False):
+        import webbrowser
+        webbrowser.open(out.resolve().as_uri())
+
     return 0
 
 
@@ -53,30 +67,59 @@ def main() -> None:
     parser.add_argument("-v", "--verbose", action="store_true", help="Mode verbeux")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # Sous-commande : import
+    # ── Sous-commande : import ──────────────────────────────────────────────
     p_import = sub.add_parser("import", help="Importer les fichiers xlsx dans la base SQLite")
-    p_import.add_argument("--data", required=True, metavar="DIR", help="Dossier des fichiers xlsx")
-    p_import.add_argument("--db", required=True, metavar="FILE", help="Chemin de la base SQLite")
+    p_import.add_argument(
+        "--data", required=True, metavar="DIR",
+        help="Dossier contenant les fichiers .xlsx",
+    )
+    p_import.add_argument(
+        "--db", required=True, metavar="FILE",
+        help="Chemin de la base SQLite (créée ou écrasée)",
+    )
     p_import.set_defaults(func=_cmd_import)
 
-    # Sous-commande : dashboard
+    # ── Sous-commande : dashboard ───────────────────────────────────────────
     p_dash = sub.add_parser("dashboard", help="Générer le dashboard HTML")
-    p_dash.add_argument("--db", required=True, metavar="FILE", help="Chemin de la base SQLite")
-    p_dash.add_argument("--out", required=True, metavar="FILE", help="Fichier HTML de sortie")
+    p_dash.add_argument(
+        "--db", required=True, metavar="FILE",
+        help="Chemin de la base SQLite",
+    )
+    p_dash.add_argument(
+        "--out", required=True, metavar="FILE",
+        help="Fichier HTML de sortie",
+    )
     p_dash.add_argument(
         "--alpha", type=float, default=0.4, metavar="ALPHA",
-        help="Coefficient de lissage EMA (défaut : 0.4)",
+        help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
+    )
+    p_dash.add_argument(
+        "--open", dest="open_browser", action="store_true",
+        help="Ouvrir le dashboard dans le navigateur après génération",
     )
     p_dash.set_defaults(func=_cmd_dashboard)
 
-    # Sous-commande : build (import + dashboard)
+    # ── Sous-commande : build (import + dashboard) ──────────────────────────
     p_build = sub.add_parser("build", help="Importer puis générer le dashboard")
-    p_build.add_argument("--data", required=True, metavar="DIR", help="Dossier des fichiers xlsx")
-    p_build.add_argument("--db", required=True, metavar="FILE", help="Chemin de la base SQLite")
-    p_build.add_argument("--out", required=True, metavar="FILE", help="Fichier HTML de sortie")
+    p_build.add_argument(
+        "--data", required=True, metavar="DIR",
+        help="Dossier contenant les fichiers .xlsx",
+    )
+    p_build.add_argument(
+        "--db", required=True, metavar="FILE",
+        help="Chemin de la base SQLite (créée ou écrasée)",
+    )
+    p_build.add_argument(
+        "--out", required=True, metavar="FILE",
+        help="Fichier HTML de sortie",
+    )
     p_build.add_argument(
         "--alpha", type=float, default=0.4, metavar="ALPHA",
-        help="Coefficient de lissage EMA (défaut : 0.4)",
+        help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
+    )
+    p_build.add_argument(
+        "--open", dest="open_browser", action="store_true",
+        help="Ouvrir le dashboard dans le navigateur après génération",
     )
     p_build.set_defaults(func=_cmd_build)
 
