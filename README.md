@@ -194,37 +194,34 @@ Compas ignore silencieusement les feuilles suivantes :
 #### Importer les fichiers Excel dans la base
 
 ```bash
-poetry run compas import --data data/ --db output/compas.db
+poetry run compas import
 ```
 
 Lit tous les fichiers `.xlsx` du dossier `data/`, reconstruit la base SQLite et affiche un résumé sur la sortie d'erreur.
 
-| Option | Description |
-|--------|-------------|
-| `--data DIR` | Dossier contenant les fichiers `.xlsx` |
-| `--db FILE` | Chemin de la base SQLite à créer ou recréer |
-| `-v` | Mode verbeux (détail de chaque feuille traitée) |
+| Option | Défaut | Description |
+|--------|--------|-------------|
+| `--data DIR` | `data/` | Dossier contenant les fichiers `.xlsx` |
+| `--db FILE` | `output/compas.db` | Chemin de la base SQLite à créer ou recréer |
+| `-v` | — | Mode verbeux (détail de chaque feuille traitée) |
 
 #### Générer le dashboard HTML
 
 ```bash
-poetry run compas dashboard --db output/compas.db --out output/dashboard.html
+poetry run compas dashboard
 ```
 
 Lit la base SQLite, calcule les EMA, tendances et rangs, et écrit le fichier HTML.
 
-| Option | Description |
-|--------|-------------|
-| `--db FILE` | Chemin de la base SQLite |
-| `--out FILE` | Fichier HTML de sortie |
+| Option | Défaut | Description |
+|--------|--------|-------------|
+| `--db FILE` | `output/compas.db` | Chemin de la base SQLite |
+| `--out FILE` | `output/dashboard.html` | Fichier HTML de sortie |
 
 #### Tout en une commande
 
 ```bash
-poetry run compas build \
-  --data data/ \
-  --db output/compas.db \
-  --out output/dashboard.html
+poetry run compas build
 ```
 
 Enchaîne l'import et la génération du dashboard.

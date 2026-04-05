@@ -43,17 +43,20 @@ compas/
 
 ## CLI
 
-Deux commandes principales via un unique point d'entrée :
+Deux commandes principales via un unique point d'entrée. Les chemins par défaut sont `data/` pour les xlsx, `output/compas.db` pour la base et `output/dashboard.html` pour le dashboard — les options restent disponibles pour surcharger :
 
 ```bash
 # Importer tous les xlsx du dossier data/ dans la base SQLite
-poetry run compas import --data data/ --db output/compas.db
+poetry run compas import
 
 # Générer le dashboard HTML depuis la base
-poetry run compas dashboard --db output/compas.db --out output/dashboard.html
+poetry run compas dashboard
 
 # Les deux à la suite (raccourci)
-poetry run compas build --data data/ --db output/compas.db --out output/dashboard.html
+poetry run compas build
+
+# Exemple avec chemins personnalisés
+poetry run compas build --data autre/dir --db autre/base.db --out autre/out.html
 ```
 
 Le point d'entrée est défini dans `pyproject.toml` :
