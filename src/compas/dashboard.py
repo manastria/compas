@@ -34,13 +34,87 @@ def _parse_heure(s: str | None) -> int | None:
     return None
 
 
+def _is_time_range(s: str) -> bool:
+    """Retourne True si s ressemble à une plage horaire (H1-H2 ou XhYY-XhYY)."""
+    return bool(re.match(r"^(?:H\d+|\d+h\d*)-(?:H\d+|\d+h\d*)$", s, re.IGNORECASE))
+
+
+def _parse_one_token(token: str, heure_debut: str | None) -> tuple[str, int]:
+    """Parse un token de présence unique (sans virgule) en (type, min_retard).
+
+    Returns:
+        Tuple (type, min_retard) où type ∈ {'P', 'A', 'R'}.
+    """
+    t = token.strip()
+    if not t or t.upper() == "P":
+        return "P", 0
+
+    parts = t.split(":", 2)
+    code = parts[0].upper()
+
+    if code == "A":
+        if len(parts) == 1:
+            return "A", 0
+        val = parts[1]
+        # A:H1-H2 ou A:9h15-10h00 = absence partielle → compté présent
+        if _is_time_range(val):
+            return "P", 0
+        return "A", 0  # A:motif = absent toute la séance
+
+    if code == "R":
+        if len(parts) < 2:
+            return "R", 0
+        val = parts[1]
+        if val.isdigit():
+            return "R", int(val)
+        arrive = _parse_heure(val)
+        if arrive is not None:
+            debut = _parse_heure(heure_debut)
+            if debut is not None:
+                return "R", max(0, arrive - debut)
+            logger.warning("Présence heure sans heure_debut, retard calculé à 0 : %r", token)
+        return "R", 0
+
+    if code == "RR":
+        if len(parts) < 2:
+            return "R", 0
+        val = parts[1]
+        if val.isdigit():
+            return "R", int(val)
+        return "R", 0
+
+    if code == "D":
+        return "P", 0  # départ anticipé, était présent au début
+
+    if code == "N":
+        return "P", 0  # note sur feuille papier, traité comme présent
+
+    # Rétrocompatibilité : R15 (ancien format sans deux-points)
+    m = re.match(r"^[Rr](\d+)$", t)
+    if m:
+        return "R", int(m.group(1))
+
+    # Rétrocompatibilité : heure nue d'arrivée (ex : 9h30)
+    arrive = _parse_heure(t)
+    if arrive is not None:
+        debut = _parse_heure(heure_debut)
+        if debut is not None:
+            return "R", max(0, arrive - debut)
+        logger.warning("Présence heure sans heure_debut, retard calculé à 0 : %r", token)
+        return "R", 0
+
+    logger.warning("Format de présence non reconnu : %r", token)
+    return "P", 0
+
+
 def _parse_presence(presence: str | None, heure_debut: str | None) -> tuple[str, int]:
     """Parse une valeur de présence et retourne (type, min_retard).
 
+    Supporte la syntaxe TYPE:valeur:motif avec combinaisons par virgule.
+
     Args:
-        presence: Valeur brute (P, A, R15, 9h30, vide…).
-        heure_debut: Heure de début de séance (ex : '8h00'), utilisée pour calculer
-            le retard si la présence est une heure d'arrivée.
+        presence: Valeur brute — syntaxe TYPE:valeur:motif, combinaisons par virgule.
+        heure_debut: Heure de début de séance (ex : '8h00'), pour calculer R:XhYY.
 
     Returns:
         Tuple (type, min_retard) où type ∈ {'P', 'A', 'R'}.
@@ -48,21 +122,17 @@ def _parse_presence(presence: str | None, heure_debut: str | None) -> tuple[str,
     p = (presence or "").strip()
     if not p or p.upper() == "P":
         return "P", 0
-    if p.upper() == "A":
+
+    tokens = [tok.strip() for tok in p.split(",")]
+    results = [_parse_one_token(tok, heure_debut) for tok in tokens]
+
+    # Un token absent sans plage → absent toute la séance
+    if any(r[0] == "A" for r in results):
         return "A", 0
-    # R + chiffres : ex. R15, R5
-    m = re.match(r"^[Rr](\d+)$", p)
-    if m:
-        return "R", int(m.group(1))
-    # Format heure d'arrivée : ex. 9h30, 10h
-    arrive = _parse_heure(p)
-    if arrive is not None:
-        debut = _parse_heure(heure_debut)
-        if debut is not None:
-            return "R", max(0, arrive - debut)
-        logger.warning("Présence heure sans heure_debut, retard calculé à 0 : %r", presence)
-        return "R", 0
-    logger.warning("Format de présence non reconnu : %r", presence)
+
+    total_min = sum(r[1] for r in results)
+    if any(r[0] == "R" for r in results):
+        return "R", total_min
     return "P", 0
 
 
@@ -198,6 +268,14 @@ def generate(
         date_derniere: str = seances[-1]["date"]
         date_fmt = datetime.strptime(date_derniere, "%Y-%m-%d").strftime("%d/%m/%Y")
 
+        # Heure début/fin de la dernière séance (première ligne suffira)
+        last_hours = conn.execute(
+            "SELECT heure_debut, heure_fin FROM releves WHERE projet_id=? AND seance=? LIMIT 1",
+            (projet_id, seance_actuelle),
+        ).fetchone()
+        heure_debut_session: str | None = last_hours["heure_debut"] if last_hours else None
+        heure_fin_session: str | None = last_hours["heure_fin"] if last_hours else None
+
         # Étudiants actifs à la date de la dernière séance
         etudiants = conn.execute(
             """SELECT id, nom, groupe, anonyme, pseudo, date_depart
@@ -208,7 +286,7 @@ def generate(
         ).fetchall()
 
         releves_rows = conn.execute(
-            """SELECT etudiant_id, seance, heure_debut,
+            """SELECT etudiant_id, seance, heure_debut, heure_fin,
                       presence, autonomie, rigueur, communication, engagement
                FROM releves WHERE projet_id=?""",
             (projet_id,),
@@ -235,7 +313,10 @@ def generate(
         "projet": projet_row["nom"],
         "groupe": projet_row["groupe"] or "",
         "seance_actuelle": seance_actuelle,
+        "seances_total": len(seances),
         "date": date_fmt,
+        "heure_debut": heure_debut_session,
+        "heure_fin": heure_fin_session,
         "alpha": alpha,
         "students": students,
     }

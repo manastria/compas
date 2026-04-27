@@ -143,6 +143,7 @@ class TestParseConfig:
         _, _, etudiants = _parse_config(wb["Config"])
         alice = etudiants[0]
         assert alice["nom"] == "Dupont Alice"
+        assert alice["ine"] == "INE001"
         assert alice["anonyme"] == 0
         assert alice["pseudo"] is None
         assert alice["date_depart"] is None
@@ -151,8 +152,15 @@ class TestParseConfig:
         wb = make_workbook()
         _, _, etudiants = _parse_config(wb["Config"])
         bob = etudiants[1]
+        assert bob["ine"] == "INE002"
         assert bob["anonyme"] == 1
         assert bob["pseudo"] == "BobM"
+
+    def test_etudiant_ine_absent(self):
+        wb = make_workbook()
+        _, _, etudiants = _parse_config(wb["Config"])
+        eve = etudiants[2]
+        assert eve["ine"] is None
 
     def test_etudiant_avec_date_depart(self):
         wb = make_workbook()
@@ -183,6 +191,7 @@ class TestParseSeance:
         assert meta["seance"] == 1
         assert meta["date"] == "2026-01-15"
         assert meta["heure_debut"] == "8h00"
+        assert meta["heure_fin"] == "12h00"
         assert meta["enseignant"] == "Prof Martin"
 
     def test_nombre_de_releves(self):
@@ -211,7 +220,7 @@ class TestParseSeance:
         wb = make_workbook()
         _, releves = _parse_seance(wb["S1"], _KNOWN_NAMES)
         bob = next(r for r in releves if r["nom"] == "Martin Bob")
-        assert bob["presence"] == "R15"
+        assert bob["presence"] == "R:15"
 
     def test_absence(self):
         wb = make_workbook()
@@ -313,7 +322,7 @@ class TestImportAll:
         config["B2"] = "G1"
         config.cell(row=4, column=1, value="Nom")
         config.cell(row=5, column=1, value="Dupont Alice")
-        config.cell(row=5, column=2, value="non")
+        config.cell(row=5, column=3, value="non")  # col C = Anonyme
         wb.create_sheet("Modèle")
         wb.create_sheet("tmp-brouillon")
         wb.save(data_dir / "test.xlsx")
@@ -342,8 +351,8 @@ class TestImportAll:
             config["B2"] = "TP1"
             config.cell(row=4, column=1, value="Nom")
             config.cell(row=5, column=1, value="Dupont Alice")
-            config.cell(row=5, column=2, value="oui")
-            config.cell(row=5, column=3, value=pseudo)
+            config.cell(row=5, column=3, value="oui")   # col C = Anonyme
+            config.cell(row=5, column=4, value=pseudo)  # col D = Pseudo
             # tri lexicographique → projet02 lu en dernier
             wb.save(data_dir / f"projet{i:02d}.xlsx")
 

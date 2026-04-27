@@ -325,8 +325,12 @@ document.getElementById("header-title").textContent =
   "Projet \u00ab\u00a0" + COMPAS_DATA.projet + "\u00a0\u00bb";
 document.getElementById("header-seance").textContent =
   "S\u00e9ance " + COMPAS_DATA.seance_actuelle;
-document.getElementById("header-sub").textContent =
-  "BTS SIO SISR \u2014 Groupe " + COMPAS_DATA.groupe + " \u2014 " + COMPAS_DATA.date;
+var headerSub = "BTS SIO SISR \u2014 Groupe " + COMPAS_DATA.groupe + " \u2014 " + COMPAS_DATA.date;
+if (COMPAS_DATA.heure_debut) {
+  headerSub += " \u2014 " + COMPAS_DATA.heure_debut;
+  if (COMPAS_DATA.heure_fin) headerSub += "\u2013" + COMPAS_DATA.heure_fin;
+}
+document.getElementById("header-sub").textContent = headerSub;
 
 /* ------------------------------------------------------------------ */
 /* Rendu des cartes                                                    */
@@ -374,7 +378,7 @@ function presHTML(p) {
   var html = '<div class="pres-line"><span class="pres-dot" style="background:' + dotColor + '"></span>' + label + '</div>';
 
   var details = [];
-  if (p.absent  > 0) details.push(p.absent  + " abs.");
+  if (p.absent  > 0) details.push(p.absent + "/" + p.total + " abs.");
   if (p.retards > 0) details.push(p.retards + " ret.");
   if (details.length) html += '<div class="detail-line">' + details.join(" / ") + '</div>';
   return html;

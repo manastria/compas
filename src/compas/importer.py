@@ -21,6 +21,7 @@ CREATE TABLE etudiants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL,
     groupe TEXT,
+    ine TEXT UNIQUE,
     anonyme INTEGER NOT NULL DEFAULT 0,
     pseudo TEXT,
     date_depart TEXT
@@ -39,6 +40,7 @@ CREATE TABLE releves (
     seance INTEGER NOT NULL,
     date TEXT NOT NULL,
     heure_debut TEXT,
+    heure_fin TEXT,
     enseignant TEXT,
     presence TEXT,
     autonomie INTEGER,
@@ -134,7 +136,8 @@ def _parse_config(ws: Worksheet) -> tuple[str, str, list[dict]]:
 
     Returns:
         Tuple (nom_projet, groupe, etudiants) où etudiants est une liste de dicts
-        avec les clés : nom, anonyme (0/1), pseudo, date_depart.
+        avec les clés : nom, ine, anonyme (0/1), pseudo, date_depart.
+        Colonnes : A=Nom, B=INE, C=Anonyme, D=Pseudo, E=Date de départ.
 
     Raises:
         ValueError: Si le champ « Projet » (B1) est absent.
@@ -155,19 +158,25 @@ def _parse_config(ws: Worksheet) -> tuple[str, str, list[dict]]:
             break
         nom = str(nom_cell).strip()
 
-        anonyme_raw = ws.cell(row=row, column=2).value
+        ine_raw = ws.cell(row=row, column=2).value
+        ine: Optional[str] = str(ine_raw).strip() if ine_raw else None
+        if ine == "":
+            ine = None
+
+        anonyme_raw = ws.cell(row=row, column=3).value
         anonyme = 1 if (anonyme_raw and str(anonyme_raw).strip().lower() == "oui") else 0
 
-        pseudo_raw = ws.cell(row=row, column=3).value
+        pseudo_raw = ws.cell(row=row, column=4).value
         pseudo: Optional[str] = str(pseudo_raw).strip() if pseudo_raw else None
         if pseudo == "":
             pseudo = None
 
-        date_depart = _parse_date(ws.cell(row=row, column=4).value)
+        date_depart = _parse_date(ws.cell(row=row, column=5).value)
 
         etudiants.append(
             {
                 "nom": nom,
+                "ine": ine,
                 "anonyme": anonyme,
                 "pseudo": pseudo,
                 "date_depart": date_depart,
@@ -212,10 +221,14 @@ def _parse_seance(ws: Worksheet, known_names: set[str]) -> tuple[dict, list[dict
     enseignant_raw = ws["H2"].value
     enseignant: Optional[str] = str(enseignant_raw).strip() if enseignant_raw else None
 
+    heure_fin_raw = ws["J2"].value
+    heure_fin: Optional[str] = str(heure_fin_raw).strip() if heure_fin_raw else None
+
     metadata = {
         "seance": seance_num,
         "date": date_seance,
         "heure_debut": heure_debut,
+        "heure_fin": heure_fin,
         "enseignant": enseignant,
     }
 
@@ -274,6 +287,7 @@ def _upsert_etudiant(
     conn: sqlite3.Connection,
     nom: str,
     groupe: str,
+    ine: Optional[str],
     anonyme: int,
     pseudo: Optional[str],
     date_depart: Optional[str],
@@ -288,6 +302,7 @@ def _upsert_etudiant(
         conn: Connexion SQLite active.
         nom: Nom complet de l'étudiant.
         groupe: Groupe associé au projet courant.
+        ine: Identifiant national étudiant (peut être None).
         anonyme: 1 si anonyme, 0 sinon.
         pseudo: Pseudo pour le dashboard (peut être None).
         date_depart: Date de départ ISO ou None.
@@ -299,14 +314,14 @@ def _upsert_etudiant(
     if nom in cache:
         etudiant_id = cache[nom]
         conn.execute(
-            "UPDATE etudiants SET groupe=?, anonyme=?, pseudo=?, date_depart=? WHERE id=?",
-            (groupe, anonyme, pseudo, date_depart, etudiant_id),
+            "UPDATE etudiants SET groupe=?, ine=?, anonyme=?, pseudo=?, date_depart=? WHERE id=?",
+            (groupe, ine, anonyme, pseudo, date_depart, etudiant_id),
         )
         return etudiant_id
 
     cursor = conn.execute(
-        "INSERT INTO etudiants (nom, groupe, anonyme, pseudo, date_depart) VALUES (?, ?, ?, ?, ?)",
-        (nom, groupe, anonyme, pseudo, date_depart),
+        "INSERT INTO etudiants (nom, groupe, ine, anonyme, pseudo, date_depart) VALUES (?, ?, ?, ?, ?, ?)",
+        (nom, groupe, ine, anonyme, pseudo, date_depart),
     )
     etudiant_id = cursor.lastrowid
     cache[nom] = etudiant_id
@@ -355,6 +370,7 @@ def import_xlsx(
             conn,
             nom=etudiant["nom"],
             groupe=groupe,
+            ine=etudiant["ine"],
             anonyme=etudiant["anonyme"],
             pseudo=etudiant["pseudo"],
             date_depart=etudiant["date_depart"],
@@ -382,15 +398,16 @@ def import_xlsx(
             try:
                 conn.execute(
                     """INSERT OR REPLACE INTO releves
-                       (etudiant_id, projet_id, seance, date, heure_debut, enseignant,
+                       (etudiant_id, projet_id, seance, date, heure_debut, heure_fin, enseignant,
                         presence, autonomie, rigueur, communication, engagement, commentaire)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         etudiant_id,
                         projet_id,
                         metadata["seance"],
                         metadata["date"],
                         metadata["heure_debut"],
+                        metadata["heure_fin"],
                         metadata["enseignant"],
                         releve["presence"],
                         releve["autonomie"],

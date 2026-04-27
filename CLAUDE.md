@@ -86,9 +86,10 @@ Contient les métadonnées du projet et la liste des étudiants.
 | Colonne | En-tête (ligne 4) | Type | Description |
 |---------|-------------------|------|-------------|
 | A | Nom | texte | Nom complet de l'étudiant |
-| B | Anonyme | texte | « oui » ou « non » |
-| C | Pseudo | texte | Pseudo pour le dashboard (si anonyme = oui) |
-| D | Date de départ | date ou texte | Date de démission, vide si actif |
+| B | INE | texte | Identifiant national étudiant (clé de croisement inter-projets, colonne masquée à l'impression) |
+| C | Anonyme | texte | « oui » ou « non » |
+| D | Pseudo | texte | Pseudo pour le dashboard (si anonyme = oui) |
+| E | Date de départ | date ou texte | Date de démission, vide si actif |
 
 La lecture s'arrête à la première ligne où la colonne A est vide.
 
@@ -109,6 +110,8 @@ Toute feuille qui n'est **pas** nommée `Config`, `Modele`, `Modèle`, ou préfi
 | F2 | Heure de début du cours (texte, ex : « 8h00 ») |
 | G2 | Libellé « Enseignant » |
 | H2 | Nom de l'enseignant |
+| I2 | Libellé « Heure fin » |
+| J2 | Heure de fin du cours (texte, ex : « 12h00 ») |
 
 **Ligne 3** : vide (espacement).
 
@@ -145,6 +148,7 @@ CREATE TABLE IF NOT EXISTS etudiants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL,
     groupe TEXT,
+    ine TEXT UNIQUE,               -- identifiant national étudiant
     anonyme INTEGER NOT NULL DEFAULT 0,  -- 0 = non, 1 = oui
     pseudo TEXT,
     date_depart TEXT  -- format ISO YYYY-MM-DD, NULL si actif
@@ -163,8 +167,9 @@ CREATE TABLE IF NOT EXISTS releves (
     seance INTEGER NOT NULL,
     date TEXT NOT NULL,  -- format ISO YYYY-MM-DD
     heure_debut TEXT,    -- ex : "8h00"
+    heure_fin TEXT,      -- ex : "12h00"
     enseignant TEXT,
-    presence TEXT,        -- P, A, R15, 9h30, etc.
+    presence TEXT,        -- syntaxe TYPE:valeur:motif, combinaisons par virgule
     autonomie INTEGER,   -- -2 à +2, NULL si non observé
     rigueur INTEGER,
     communication INTEGER,
@@ -187,7 +192,7 @@ La correspondance étudiant se fait par **nom exact** entre la feuille Config et
 
 ### Dédoublonnage des étudiants
 
-Un même étudiant peut apparaître dans plusieurs fichiers xlsx (plusieurs projets). La table `etudiants` ne doit contenir qu'une seule entrée par nom. En cas de conflit sur les champs `anonyme`, `pseudo` ou `date_depart`, la valeur la plus récente (dernier fichier lu) prévaut.
+Un même étudiant peut apparaître dans plusieurs fichiers xlsx (plusieurs projets). La table `etudiants` ne doit contenir qu'une seule entrée par nom. En cas de conflit sur les champs `ine`, `anonyme`, `pseudo` ou `date_depart`, la valeur la plus récente (dernier fichier lu) prévaut. L'INE sert de clé de croisement avec les autres projets (ex : Assiduité) ; son unicité est garantie par la contrainte `UNIQUE` SQLite.
 
 ## Calcul EMA (Exponential Moving Average)
 
@@ -230,12 +235,48 @@ Les seuils sont configurables. Si un critère a un EMA NULL, il est exclu du cal
 
 ### Parsing
 
-| Valeur brute | Interprétation |
-|-------------|----------------|
-| `P` ou vide | Présent, 0 min de retard |
-| `A` | Absent |
-| `R` suivi de chiffres (ex : `R15`, `R5`) | Retard, extraire les minutes |
-| Format heure `Xh`, `XhYY` (ex : `9h30`, `10h`) | Retard, calculer les minutes depuis l'heure de début de la séance |
+Le pattern est uniforme : `LETTRE:valeur:motif`. Le `:` est le séparateur systématique entre le type, la valeur et le motif optionnel. Les combinaisons utilisent la virgule comme séparateur.
+
+**Éléments simples :**
+
+| Syntaxe | Signification |
+|---------|---------------|
+| *(vide)* ou `P` | Présent toute la séance |
+| `A` | Absent toute la séance |
+| `A:motif` | Absent toute la séance avec motif |
+| `A:H1-H2` | Absent heures 1-2 |
+| `A:H1-H2:motif` | Absent heures 1-2 avec motif |
+| `A:9h15-10h00` | Absent de 9h15 à 10h00 (départ temporaire + retour) |
+| `A:9h15-10h00:motif` | Idem avec motif |
+| `R:15` | Retard de 15 min en début de cours |
+| `R:9h30` | Arrivée tardive à 9h30 |
+| `R:9h30:motif` | Arrivée tardive avec motif |
+| `RR:10` | Retard de 10 min après la récréation |
+| `RR:10:motif` | Idem avec motif |
+| `D:10h15` | Départ définitif à 10h15 |
+| `D:10h15:motif` | Départ définitif avec motif |
+| `N` | Note sur la feuille papier — consulter le scan |
+
+**Combinaisons (séparateur virgule) :**
+
+| Syntaxe | Signification |
+|---------|---------------|
+| `R:5,RR:10` | Retard début + retard après récré |
+| `R:10,D:11h30:medical` | Retard début + départ anticipé |
+| `A:H1-H2,RR:5` | Absent H1-H2 + retard après récré |
+| `R:5,N` | Retard de 5 min + note sur la feuille |
+
+**Règles :** motif = un mot unique sans espace. Créneaux = `H1`, `H2`, `H3`, `H4` ou format `XhYY`. `N` peut apparaître seul ou combiné. Si la situation est trop complexe, `N` seul suffit.
+
+**Interprétation pour les statistiques :**
+
+- `A` ou `A:motif` (motif sans plage) → absent toute la séance
+- `A:H1-H2` ou `A:XhYY-XhYY` → absence partielle, compté comme présent
+- `R:N` ou `RR:N` → présent avec retard, N = minutes
+- `R:XhYY` → retard calculé depuis `heure_debut`
+- `D:XhYY` → présent (départ anticipé, était là au début)
+- `N` → présent (détail sur la feuille papier)
+- Combinaisons : absent si l'un des tokens donne `A` sans plage, sinon présent ; minutes de retard cumulées
 
 ### Statistiques affichées
 
@@ -270,6 +311,8 @@ var COMPAS_DATA = {
   seance_actuelle: 4,
   seances_total: 6,
   date: "27/03/2026",
+  heure_debut: "8h00",
+  heure_fin: "12h00",
   alpha: 0.4,
   students: [
     {
@@ -294,6 +337,13 @@ var COMPAS_DATA = {
 - **Erreurs** : les erreurs de parsing (cellule inattendue, format inconnu) émettent un warning et continuent. Seules les erreurs structurelles (fichier illisible, Config manquante) sont fatales.
 - **Tests** : pytest, un fichier xlsx de fixture dans `tests/fixtures/`
 - **Formatage** : ruff (lint + format)
+
+## Évolutions prévues
+
+- **Projet Assiduité** : projet frère avec la même stack technique, syntaxe de présence partagée, croisement des données par INE
+- **Dashboard compact vidéoprojeté** : grille de cartes avec histogrammes verticaux (en cours)
+- **Fiche individuelle par étudiant** : vue détaillée avec historique des séances
+- **Rangs gamifiés** : seuils et badges à définir
 
 ## Ce qui est hors scope pour la v1
 
