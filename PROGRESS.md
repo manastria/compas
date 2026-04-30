@@ -35,9 +35,9 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 
 ## P2 - Dashboard compact vidéoprojeté (en cours dans CLAUDE)
 
-- [ ] Stabiliser la grille responsive de cartes
-- [ ] Finaliser histogrammes verticaux et lisibilité en projection
-- [ ] Ajouter tests simples de structure HTML générée
+- [x] Stabiliser la grille responsive de cartes
+- [x] Finaliser histogrammes verticaux et lisibilité en projection
+- [x] Ajouter tests simples de structure HTML générée
 
 ## P3 - Évolutions prévues
 
@@ -53,6 +53,14 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 - [ ] Pas d’impact de la présence sur les scores
 
 ## Journal de session
+
+## Session - 2026-04-30 (suite — P2 Dashboard compact vidéoprojeté)
+
+- **Objectif** — Stabiliser la grille, corriger le bug de l'histogramme, améliorer la lisibilité en projection, ajouter les tests de structure HTML.
+- **Réalisé** — Bug `scoreToPercent` corrigé (clamp [-1,+1] → échelle [-2,+2] complète) ; grille `<div>` → `<ul>` natif (sémantique) avec `auto-fit` (cartes élargies si peu d'étudiants) ; bouton `type="button"` ; points de légende via classes CSS (`legend-dot--*`) au lieu de styles inline ; chart height 70→80 px, label 8→9 px, gap 5 px ; `data-rank`/`data-name` sur chaque `<li>` ; `escapeAttr()` pour sécuriser le HTML JS-généré ; classe `TestDashboardHTML` (13 tests : structure statique, formule JS, JSON).
+- **Vérifications** — `ruff check src/ tests/` OK ; `pytest` 170 passed (+13 nouveaux).
+- **Risques/notes** — Les tests de cartes vérifient le JSON (source de vérité) car le rendu DOM est JS-only ; pas de régression côté Python.
+- **Prochaines actions** — Démarrer P3 ou affiner le dashboard (taille de police en projection à valider en conditions réelles).
 
 ## Session - 2026-04-30 (suite — P1 Robustesse et qualité)
 

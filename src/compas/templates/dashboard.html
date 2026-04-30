@@ -113,11 +113,16 @@
     }
     .theme-btn:hover { background: var(--bg-bar-track); color: var(--text-primary); }
 
-    /* ── Grille de cartes ── */
+    /* ── Grille de cartes ──
+       auto-fit (pas auto-fill) : les colonnes vides sont collapsées,
+       ce qui élargit les cartes restantes — meilleure lisibilité en projection.
+       Largeur minimale 200 px pour garder les histogrammes lisibles à distance. */
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 10px;
+      list-style: none;
+      padding-left: 0;
     }
     @media (min-width: 1100px) {
       .grid { grid-template-columns: repeat(5, 1fr); }
@@ -193,14 +198,16 @@
 
     .detail-line { font-size: 10px; color: var(--text-tertiary); }
 
-    /* ── Histogramme ── */
+    /* ── Histogramme ──
+       Hauteur 80 px pour une meilleure lisibilité en projection (était 70 px).
+       Largeur 80 px pour accueillir 4 barres de ~15 px avec gap 5 px. */
     .chart {
       display: flex;
       align-items: flex-end;
-      gap: 4px;
+      gap: 5px;
       flex-shrink: 0;
-      width: 72px;
-      height: 70px;
+      width: 80px;
+      height: 80px;
       padding-top: 2px;
     }
 
@@ -213,7 +220,7 @@
     }
 
     .bar-label {
-      font-size: 8px;
+      font-size: 9px;
       color: var(--text-tertiary);
       margin-bottom: 3px;
       text-align: center;
@@ -252,9 +259,15 @@
       gap: 12px;
       align-items: center;
     }
-    .legend-title { font-weight: 500; color: var(--text-primary); }
-    .legend-item  { display: flex; align-items: center; gap: 3px; }
-    .legend-dot   { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+    .legend-title    { font-weight: 500; color: var(--text-primary); }
+    .legend-title--gap { margin-left: 8px; }
+    .legend-item     { display: flex; align-items: center; gap: 3px; }
+    .legend-dot      { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+    .legend-dot--red    { background: #E24B4A; }
+    .legend-dot--orange { background: #EF9F27; }
+    .legend-dot--amber  { background: #BA7517; }
+    .legend-dot--green  { background: #639922; }
+    .legend-dot--teal   { background: #1D9E75; }
   </style>
 </head>
 <body>
@@ -264,11 +277,11 @@
     <span class="header-title" id="header-title"></span>
     <span class="header-seance" id="header-seance"></span>
   </div>
-  <button id="theme-btn" class="theme-btn" title="Changer le th&#232;me d&#39;affichage">Auto</button>
+  <button type="button" id="theme-btn" class="theme-btn" title="Changer le th&#232;me d&#39;affichage">Auto</button>
 </div>
 <p class="header-sub" id="header-sub"></p>
 
-<div class="grid" id="grid"></div>
+<ul class="grid" id="grid"></ul>
 
 <div class="legend">
   <span class="legend-title">Crit&#232;res&nbsp;:</span>
@@ -276,12 +289,12 @@
   <span class="legend-item">Ri&nbsp;= Rigueur</span>
   <span class="legend-item">Co&nbsp;= Communication</span>
   <span class="legend-item">En&nbsp;= Engagement</span>
-  <span style="margin-left:8px" class="legend-title">Barres&nbsp;:</span>
-  <span class="legend-item"><span class="legend-dot" style="background:#E24B4A"></span>Insuffisant</span>
-  <span class="legend-item"><span class="legend-dot" style="background:#EF9F27"></span>&#192;&nbsp;am&#233;liorer</span>
-  <span class="legend-item"><span class="legend-dot" style="background:#BA7517"></span>Neutre</span>
-  <span class="legend-item"><span class="legend-dot" style="background:#639922"></span>Bien</span>
-  <span class="legend-item"><span class="legend-dot" style="background:#1D9E75"></span>Excellent</span>
+  <span class="legend-title legend-title--gap">Barres&nbsp;:</span>
+  <span class="legend-item"><span class="legend-dot legend-dot--red"></span>Insuffisant</span>
+  <span class="legend-item"><span class="legend-dot legend-dot--orange"></span>&#192;&nbsp;am&#233;liorer</span>
+  <span class="legend-item"><span class="legend-dot legend-dot--amber"></span>Neutre</span>
+  <span class="legend-item"><span class="legend-dot legend-dot--green"></span>Bien</span>
+  <span class="legend-item"><span class="legend-dot legend-dot--teal"></span>Excellent</span>
 </div>
 
 <script>
@@ -322,13 +335,13 @@ var COMPAS_DATA = {{ compas_data_json | safe }};
 /* En-tête dynamique                                                   */
 /* ------------------------------------------------------------------ */
 document.getElementById("header-title").textContent =
-  "Projet \u00ab\u00a0" + COMPAS_DATA.projet + "\u00a0\u00bb";
+  "Projet « " + COMPAS_DATA.projet + " »";
 document.getElementById("header-seance").textContent =
-  "S\u00e9ance " + COMPAS_DATA.seance_actuelle;
-var headerSub = "BTS SIO SISR \u2014 Groupe " + COMPAS_DATA.groupe + " \u2014 " + COMPAS_DATA.date;
+  "Séance " + COMPAS_DATA.seance_actuelle;
+var headerSub = "BTS SIO SISR — Groupe " + COMPAS_DATA.groupe + " — " + COMPAS_DATA.date;
 if (COMPAS_DATA.heure_debut) {
-  headerSub += " \u2014 " + COMPAS_DATA.heure_debut;
-  if (COMPAS_DATA.heure_fin) headerSub += "\u2013" + COMPAS_DATA.heure_fin;
+  headerSub += " — " + COMPAS_DATA.heure_debut;
+  if (COMPAS_DATA.heure_fin) headerSub += "–" + COMPAS_DATA.heure_fin;
 }
 document.getElementById("header-sub").textContent = headerSub;
 
@@ -345,9 +358,16 @@ var rankStyles = {
   alerte: { bg: "var(--rank-alerte-bg)", color: "var(--rank-alerte-text)", border: "var(--rank-alerte-border)", label: "Alerte" }
 };
 
+function escapeAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+/* Convertit un score EMA en pourcentage de remplissage de barre.
+   Échelle complète -2 → 0 % ... +2 → 100 %.
+   Chaque unité vaut 25 points : -1 → 25 %, 0 → 50 %, +1 → 75 %. */
 function scoreToPercent(v) {
   if (v === null || v === undefined) return null;
-  return Math.round(((Math.max(-1, Math.min(1, v)) + 1) / 2) * 100);
+  return Math.round(Math.max(0, Math.min(100, ((v + 2) / 4) * 100)));
 }
 
 function barColor(pct) {
@@ -366,7 +386,7 @@ function trendHTML(t) {
 
 function presHTML(p) {
   if (!p || p.total === 0) {
-    return '<div class="pres-line"><span class="pres-dot" style="background:var(--text-tertiary)"></span>\u2014</div>';
+    return '<div class="pres-line"><span class="pres-dot" style="background:var(--text-tertiary)"></span>—</div>';
   }
   var taux = Math.round((p.present / p.total) * 100);
   var dotColor;
@@ -374,7 +394,7 @@ function presHTML(p) {
   else if (taux >= 75) dotColor = "#BA7517";
   else                 dotColor = "#E24B4A";
 
-  var label = taux === 100 ? "Assidu" : taux + "\u00a0%";
+  var label = taux === 100 ? "Assidu" : taux + " %";
   var html = '<div class="pres-line"><span class="pres-dot" style="background:' + dotColor + '"></span>' + label + '</div>';
 
   var details = [];
@@ -411,9 +431,9 @@ COMPAS_DATA.students.forEach(function (s) {
   var r = rankStyles[s.rank] || rankStyles.alerte;
 
   var card =
-    '<div class="card">' +
+    '<li class="card" data-rank="' + escapeAttr(s.rank) + '" data-name="' + escapeAttr(s.name) + '">' +
       '<div class="card-top">' +
-        '<span class="' + nameClass + '">' + displayName + '</span>' +
+        '<span class="' + nameClass + '">' + escapeAttr(displayName) + '</span>' +
         trendHTML(s.trend) +
       '</div>' +
       '<div class="card-body">' +
@@ -423,7 +443,7 @@ COMPAS_DATA.students.forEach(function (s) {
         '</div>' +
         chartHTML(s) +
       '</div>' +
-    '</div>';
+    '</li>';
 
   grid.insertAdjacentHTML("beforeend", card);
 });

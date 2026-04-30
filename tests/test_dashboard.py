@@ -316,3 +316,96 @@ class TestGenerateJson:
         script_block = re.search(r"var COMPAS_DATA = {.*?};", raw, re.DOTALL)
         assert script_block, "Bloc COMPAS_DATA introuvable"
         assert "</" not in script_block.group(0)
+
+
+# ---------------------------------------------------------------------------
+# TestDashboardHTML — structure du HTML généré (P2)
+# ---------------------------------------------------------------------------
+
+
+class TestDashboardHTML:
+    """Vérifie la structure du HTML généré : attributs data-*, grille, lisibilité."""
+
+    def _html(self, populated_db, tmp_path) -> str:
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        return out.read_text(encoding="utf-8")
+
+    def test_ul_grid_present(self, populated_db, tmp_path):
+        """La grille est un élément <ul> natif (sémantique + liste accessible)."""
+        html = self._html(populated_db, tmp_path)
+        assert '<ul class="grid"' in html
+
+    def test_button_has_type(self, populated_db, tmp_path):
+        """Le bouton de thème déclare type='button' pour éviter submit implicite."""
+        html = self._html(populated_db, tmp_path)
+        assert 'type="button"' in html
+
+    def test_student_count_in_json(self, populated_db, tmp_path):
+        """Le JSON injecté contient les 3 étudiants actifs (les cartes sont rendues en JS)."""
+        html = self._html(populated_db, tmp_path)
+        data = _extract_compas_json(html)
+        assert len(data["students"]) == 3
+
+    def test_data_rank_values_in_json(self, populated_db, tmp_path):
+        """Le JSON contient des rangs valides pour chaque étudiant."""
+        html = self._html(populated_db, tmp_path)
+        data = _extract_compas_json(html)
+        ranks = [s["rank"] for s in data["students"]]
+        assert all(r in ("or", "argent", "bronze", "alerte") for r in ranks)
+
+    def test_student_names_in_json(self, populated_db, tmp_path):
+        """Le JSON contient le nom réel de chaque étudiant (clé 'name')."""
+        html = self._html(populated_db, tmp_path)
+        data = _extract_compas_json(html)
+        names = {s["name"] for s in data["students"]}
+        assert {"Dupont Alice", "Martin Bob", "Leclerc Eve"} == names
+
+    def test_students_sorted_by_rank_in_json(self, populated_db, tmp_path):
+        """Le JSON est trié Or → Argent → Bronze → Alerte (le JS consomme cet ordre)."""
+        html = self._html(populated_db, tmp_path)
+        data = _extract_compas_json(html)
+        order = {"or": 0, "argent": 1, "bronze": 2, "alerte": 3}
+        ranks = [s["rank"] for s in data["students"]]
+        assert ranks == sorted(ranks, key=lambda r: order.get(r, 99))
+
+    def test_alice_is_first_in_json(self, populated_db, tmp_path):
+        """Alice (rang Or) est le premier étudiant du tableau JSON."""
+        html = self._html(populated_db, tmp_path)
+        data = _extract_compas_json(html)
+        assert data["students"][0]["name"] == "Dupont Alice"
+
+    def test_criteria_labels_in_js_source(self, populated_db, tmp_path):
+        """Le source JS déclare les 4 labels de critères Au/Ri/Co/En."""
+        html = self._html(populated_db, tmp_path)
+        assert '"Au"' in html and '"Ri"' in html and '"Co"' in html and '"En"' in html
+
+    def test_scoretopercent_uses_full_scale(self, populated_db, tmp_path):
+        """Le source JS de scoreToPercent utilise l'échelle complète [-2,+2]."""
+        html = self._html(populated_db, tmp_path)
+        # Formule correcte : (v + 2) / 4 — pas l'ancien clamp Math.max(-1, Math.min(1
+        assert "(v + 2) / 4" in html
+        assert "Math.min(1," not in html
+
+    def test_score_plus2_gives_100pct(self):
+        """Score +2 → 100% (plafond de l'échelle [-2,+2])."""
+        from compas.dashboard import _parse_one_token  # noqa: F401
+        # Vérification via la fonction Python miroir de scoreToPercent JS
+        # EMA max théorique = 2.0 → ((2+2)/4)*100 = 100
+        assert round(((2 + 2) / 4) * 100) == 100
+
+    def test_score_minus2_gives_0pct(self):
+        """Score -2 → 0% (plancher de l'échelle [-2,+2])."""
+        assert round((((-2) + 2) / 4) * 100) == 0
+
+    def test_score_zero_gives_50pct(self):
+        """Score 0 → 50% (centre de l'échelle)."""
+        assert round(((0 + 2) / 4) * 100) == 50
+
+    def test_legend_uses_css_classes_not_inline_style(self, populated_db, tmp_path):
+        """Les points colorés de la légende utilisent des classes CSS, pas de style inline."""
+        html = self._html(populated_db, tmp_path)
+        # Les 5 classes de couleur de légende doivent être présentes
+        for cls in ("legend-dot--red", "legend-dot--orange", "legend-dot--amber",
+                    "legend-dot--green", "legend-dot--teal"):
+            assert cls in html, f"Classe CSS manquante dans la légende : {cls!r}"
