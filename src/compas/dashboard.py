@@ -39,8 +39,15 @@ def _is_time_range(s: str) -> bool:
     return bool(re.match(r"^(?:H\d+|\d+h\d*)-(?:H\d+|\d+h\d*)$", s, re.IGNORECASE))
 
 
-def _parse_one_token(token: str, heure_debut: str | None) -> tuple[str, int]:
+def _parse_one_token(
+    token: str, heure_debut: str | None, label: str = ""
+) -> tuple[str, int]:
     """Parse un token de présence unique (sans virgule) en (type, min_retard).
+
+    Args:
+        token: Fragment de présence (ex : 'R:15', 'A:H1-H2').
+        heure_debut: Heure de début de séance pour calculer les retards en heures.
+        label: Contexte optionnel (ex : nom étudiant) ajouté aux warnings.
 
     Returns:
         Tuple (type, min_retard) où type ∈ {'P', 'A', 'R'}.
@@ -72,7 +79,7 @@ def _parse_one_token(token: str, heure_debut: str | None) -> tuple[str, int]:
             debut = _parse_heure(heure_debut)
             if debut is not None:
                 return "R", max(0, arrive - debut)
-            logger.warning("Présence heure sans heure_debut, retard calculé à 0 : %r", token)
+            _warn_presence("Présence heure sans heure_debut, retard calculé à 0", token, label)
         return "R", 0
 
     if code == "RR":
@@ -100,14 +107,24 @@ def _parse_one_token(token: str, heure_debut: str | None) -> tuple[str, int]:
         debut = _parse_heure(heure_debut)
         if debut is not None:
             return "R", max(0, arrive - debut)
-        logger.warning("Présence heure sans heure_debut, retard calculé à 0 : %r", token)
+        _warn_presence("Présence heure sans heure_debut, retard calculé à 0", token, label)
         return "R", 0
 
-    logger.warning("Format de présence non reconnu : %r", token)
+    _warn_presence("Format de présence non reconnu", token, label)
     return "P", 0
 
 
-def _parse_presence(presence: str | None, heure_debut: str | None) -> tuple[str, int]:
+def _warn_presence(msg: str, token: str, label: str) -> None:
+    """Émet un warning de présence avec contexte étudiant optionnel."""
+    if label:
+        logger.warning("%s [%s] : %r", msg, label, token)
+    else:
+        logger.warning("%s : %r", msg, token)
+
+
+def _parse_presence(
+    presence: str | None, heure_debut: str | None, label: str = ""
+) -> tuple[str, int]:
     """Parse une valeur de présence et retourne (type, min_retard).
 
     Supporte la syntaxe TYPE:valeur:motif avec combinaisons par virgule.
@@ -115,6 +132,7 @@ def _parse_presence(presence: str | None, heure_debut: str | None) -> tuple[str,
     Args:
         presence: Valeur brute — syntaxe TYPE:valeur:motif, combinaisons par virgule.
         heure_debut: Heure de début de séance (ex : '8h00'), pour calculer R:XhYY.
+        label: Contexte optionnel (ex : nom étudiant) ajouté aux warnings.
 
     Returns:
         Tuple (type, min_retard) où type ∈ {'P', 'A', 'R'}.
@@ -124,7 +142,7 @@ def _parse_presence(presence: str | None, heure_debut: str | None) -> tuple[str,
         return "P", 0
 
     tokens = [tok.strip() for tok in p.split(",")]
-    results = [_parse_one_token(tok, heure_debut) for tok in tokens]
+    results = [_parse_one_token(tok, heure_debut, label) for tok in tokens]
 
     # Un token absent sans plage → absent toute la séance
     if any(r[0] == "A" for r in results):
@@ -136,11 +154,12 @@ def _parse_presence(presence: str | None, heure_debut: str | None) -> tuple[str,
     return "P", 0
 
 
-def _presence_stats(releves: list[dict]) -> dict:
+def _presence_stats(releves: list[dict], nom: str = "") -> dict:
     """Calcule les statistiques de présence d'un étudiant.
 
     Args:
         releves: Liste de relevés (dicts issus de la table releves).
+        nom: Nom de l'étudiant, inclus dans les warnings de présence malformée.
 
     Returns:
         Dict avec les clés : total, present, absent, retards, min_retard.
@@ -151,7 +170,7 @@ def _presence_stats(releves: list[dict]) -> dict:
     retards = 0
     min_retard = 0
     for r in releves:
-        ptype, mins = _parse_presence(r.get("presence"), r.get("heure_debut"))
+        ptype, mins = _parse_presence(r.get("presence"), r.get("heure_debut"), label=nom)
         if ptype == "A":
             absent += 1
         else:
@@ -209,7 +228,7 @@ def _student_data(
         "scores": scores,
         "trend": trend,
         "rank": compute_rank(scores),
-        "presence": _presence_stats(releves),
+        "presence": _presence_stats(releves, nom=etudiant.get("nom", "")),
     }
 
 

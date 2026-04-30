@@ -389,3 +389,128 @@ class TestImportAll:
 
         with pytest.raises(ValueError, match="Config"):
             import_all(data_dir, tmp_path / "compas.db")
+
+
+# ---------------------------------------------------------------------------
+# Stratégie last-file-wins : tous les champs en conflit
+# ---------------------------------------------------------------------------
+
+
+def _make_two_configs(
+    tmp_path,
+    *,
+    ine1=None,
+    ine2=None,
+    anonyme1="non",
+    anonyme2="non",
+    pseudo1=None,
+    pseudo2=None,
+    date_depart1=None,
+    date_depart2=None,
+) -> tuple:
+    """Crée deux xlsx avec le même étudiant, champs potentiellement différents.
+
+    Retourne (data_dir, db_path).
+    """
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    for i, (ine, anon, pseudo, depart) in enumerate(
+        [
+            (ine1, anonyme1, pseudo1, date_depart1),
+            (ine2, anonyme2, pseudo2, date_depart2),
+        ],
+        start=1,
+    ):
+        wb = openpyxl.Workbook()
+        config = wb.active
+        config.title = "Config"
+        config["A1"] = "Projet"
+        config["B1"] = f"Projet {i}"
+        config["A2"] = "Groupe"
+        config["B2"] = "TP1"
+        config.cell(row=4, column=1, value="Nom")
+        config.cell(row=5, column=1, value="Dupont Alice")
+        if ine:
+            config.cell(row=5, column=2, value=ine)
+        config.cell(row=5, column=3, value=anon)
+        if pseudo:
+            config.cell(row=5, column=4, value=pseudo)
+        if depart:
+            config.cell(row=5, column=5, value=depart)
+        wb.save(data_dir / f"projet{i:02d}.xlsx")
+
+    return data_dir, tmp_path / "compas.db"
+
+
+class TestLastFileWins:
+    """Vérifie la stratégie « dernier fichier lu prévaut » pour tous les champs en conflit."""
+
+    def test_ine_last_wins(self, tmp_path):
+        data_dir, db_path = _make_two_configs(tmp_path, ine1="INE_A", ine2="INE_B")
+        import_all(data_dir, db_path)
+        conn = sqlite3.connect(db_path)
+        try:
+            ine = conn.execute(
+                "SELECT ine FROM etudiants WHERE nom='Dupont Alice'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        assert ine == "INE_B"
+
+    def test_anonyme_last_wins(self, tmp_path):
+        data_dir, db_path = _make_two_configs(
+            tmp_path, anonyme1="non", anonyme2="oui", pseudo2="AliceX"
+        )
+        import_all(data_dir, db_path)
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT anonyme, pseudo FROM etudiants WHERE nom='Dupont Alice'"
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row[0] == 1
+        assert row[1] == "AliceX"
+
+    def test_date_depart_last_wins(self, tmp_path):
+        data_dir, db_path = _make_two_configs(
+            tmp_path, date_depart1="2026-01-01", date_depart2="2026-06-15"
+        )
+        import_all(data_dir, db_path)
+        conn = sqlite3.connect(db_path)
+        try:
+            dd = conn.execute(
+                "SELECT date_depart FROM etudiants WHERE nom='Dupont Alice'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        assert dd == "2026-06-15"
+
+    def test_ine_second_file_wins_even_if_null(self, tmp_path):
+        """Le second fichier écrase l'INE même si le second n'en a pas (NULL prévaut)."""
+        data_dir, db_path = _make_two_configs(tmp_path, ine1="INE_A", ine2=None)
+        import_all(data_dir, db_path)
+        conn = sqlite3.connect(db_path)
+        try:
+            ine = conn.execute(
+                "SELECT ine FROM etudiants WHERE nom='Dupont Alice'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        assert ine is None
+
+    def test_une_seule_entree_par_etudiant(self, tmp_path):
+        """Quel que soit le nombre de fichiers, l'étudiant n'est inséré qu'une fois."""
+        data_dir, db_path = _make_two_configs(
+            tmp_path, ine1="INE_A", ine2="INE_A", pseudo1="A1", pseudo2="A2"
+        )
+        import_all(data_dir, db_path)
+        conn = sqlite3.connect(db_path)
+        try:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM etudiants WHERE nom='Dupont Alice'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        assert count == 1

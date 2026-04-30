@@ -27,11 +27,11 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 
 ## P1 - Robustesse et qualité (court terme)
 
-- [ ] Renforcer les tests d’intégration de bout en bout (fixtures multi-fichiers)
-- [ ] Étendre les tests sur les cas limites de présence
-- [ ] Vérifier et documenter précisément la stratégie last file wins
-- [ ] Ajouter des tests de non-régression sur le JSON injecté au template
-- [ ] Clarifier les messages de warning sur formats inattendus
+- [x] Renforcer les tests d’intégration de bout en bout (fixtures multi-fichiers)
+- [x] Étendre les tests sur les cas limites de présence
+- [x] Vérifier et documenter précisément la stratégie last file wins
+- [x] Ajouter des tests de non-régression sur le JSON injecté au template
+- [x] Clarifier les messages de warning sur formats inattendus
 
 ## P2 - Dashboard compact vidéoprojeté (en cours dans CLAUDE)
 
@@ -54,41 +54,32 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 
 ## Journal de session
 
+## Session - 2026-04-30 (suite — P1 Robustesse et qualité)
+
+- **Objectif** — Implémenter tous les items P1 : tests d'intégration, cas limites, last-file-wins, JSON non-régression, warnings.
+- **Réalisé** — `conftest.py` fixture `populated_db` ; `TestLastFileWins` (5 tests, ine/anonyme/pseudo/date_depart/unicité) ; `TestGenerateJson` (11 tests, structure et valeurs JSON) ; `test_integration.py` (9 tests end-to-end, pipeline simple + multi-fichiers) ; `_parse_presence` avec `label` pour warnings contextuels ; fix ruff E501 dans importer.py.
+- **Vérifications** — `ruff check src/ tests/` OK ; `pytest` 157 passed (+30 nouveaux).
+- **Risques/notes** — last-file-wins sur INE (NULL écrase) documenté et testé ; `label=""` par défaut → rétrocompat totale.
+- **Prochaines actions** — Démarrer P2 (dashboard compact vidéoprojeté).
+
 ## Session - 2026-04-30
 
-### Objectif
-
-- Mettre en place la base de customisation agent et de suivi projet.
-
-### Réalisé
-
-- Ajout de AGENTS.md (guide minimal pour agents)
-- Ajout de .github/instructions/tests.instructions.md (routine tests/lint)
-- Création de PROGRESS.md (plan et journal)
-
-### Vérifications
-
-- Vérification structurelle des fichiers markdown créés
-- Pas de commande de tests exécutée (changement documentaire uniquement)
-
-### Risques/notes
-
-- Le plan P1/P2/P3 est une projection issue de CLAUDE.md et devra être ajusté selon les priorités réelles.
-
-### Prochaines actions proposées
-
-- Prioriser 2 à 3 items P1 et les transformer en tâches testables
-- Ajouter une session à chaque fin de travail
+- **Objectif** — Mettre en place la base de customisation agent et de suivi projet.
+- **Réalisé** — Ajout de AGENTS.md, `.github/instructions/tests.instructions.md`, PROGRESS.md.
+- **Vérifications** — Vérification structurelle des fichiers markdown ; pas de tests exécutés (changement documentaire uniquement).
+- **Risques/notes** — Le plan P1/P2/P3 est une projection issue de CLAUDE.md, à ajuster selon les priorités réelles.
+- **Prochaines actions** — Prioriser 2 à 3 items P1 ; ajouter une session à chaque fin de travail.
 
 ## Règle de mise à jour en fin de session
 
-À la fin de chaque session, ajouter une nouvelle section sous Journal de session avec:
+À la fin de chaque session, ajouter `## Session - YYYY-MM-DD` suivi d'une liste à puces :
 
-1. Date
-2. Objectif
-3. Réalisé
-4. Vérifications (commandes exécutées et résultats)
-5. Risques/notes
-6. Prochaines actions
+```markdown
+- **Objectif** — ...
+- **Réalisé** — ...
+- **Vérifications** — commandes exécutées et résultats.
+- **Risques/notes** — ...
+- **Prochaines actions** — ...
+```
 
 Conserver les anciennes sessions (historique append-only).

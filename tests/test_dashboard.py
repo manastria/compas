@@ -1,8 +1,12 @@
-"""Tests du module compas.dashboard — parsing de présence."""
+"""Tests du module compas.dashboard — parsing de présence et génération JSON."""
+
+import json
+import logging
+import re
 
 import pytest
 
-from compas.dashboard import _is_time_range, _parse_one_token, _parse_presence
+from compas.dashboard import _is_time_range, _parse_one_token, _parse_presence, generate
 
 
 # ---------------------------------------------------------------------------
@@ -175,3 +179,140 @@ class TestParsePresence:
 
     def test_retrocompat_bare_heure(self):
         assert _parse_presence("9h30", "8h00") == ("R", 90)
+
+    def test_n_combined_with_r(self):
+        # N (note papier) + R:5 → présent avec retard
+        assert _parse_presence("R:5,N", None) == ("R", 5)
+
+    def test_multiple_p_tokens(self):
+        # Combinaison de deux P → présent, 0 min
+        assert _parse_presence("P,P", None) == ("P", 0)
+
+    def test_unknown_token_emits_warning(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="compas.dashboard"):
+            result = _parse_presence("INCONNU:truc", None)
+        assert result == ("P", 0)
+        assert "non reconnu" in caplog.text
+
+    def test_rr_alone_returns_r_zero(self):
+        # RR sans valeur → retard de 0 min
+        assert _parse_one_token("RR", None) == ("R", 0)
+
+    def test_d_alone_returns_present(self):
+        # D sans heure (mal formé) → présent par défaut
+        assert _parse_one_token("D", None) == ("P", 0)
+
+
+# ---------------------------------------------------------------------------
+# _extract_compas_json — helper local pour les tests de génération
+# ---------------------------------------------------------------------------
+
+
+def _extract_compas_json(html: str) -> dict:
+    """Extrait le JSON COMPAS_DATA injecté dans la balise <script> du dashboard."""
+    m = re.search(r"var COMPAS_DATA = ({.*?});", html, re.DOTALL)
+    assert m, "var COMPAS_DATA introuvable dans le HTML généré"
+    return json.loads(m.group(1))
+
+
+# ---------------------------------------------------------------------------
+# TestGenerateJson — non-régression sur le JSON injecté au template
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateJson:
+    def test_html_generated(self, populated_db, tmp_path):
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        assert out.exists()
+        assert out.stat().st_size > 0
+
+    def test_top_level_keys_present(self, populated_db, tmp_path):
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        data = _extract_compas_json(out.read_text(encoding="utf-8"))
+        expected_keys = (
+            "projet", "groupe", "seance_actuelle", "seances_total", "date", "alpha", "students"
+        )
+        for key in expected_keys:
+            assert key in data, f"Clé manquante dans COMPAS_DATA : {key!r}"
+
+    def test_projet_and_groupe(self, populated_db, tmp_path):
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        data = _extract_compas_json(out.read_text(encoding="utf-8"))
+        assert data["projet"] == "Infrastructure réseau PME"
+        assert data["groupe"] == "TP1"
+
+    def test_seance_info(self, populated_db, tmp_path):
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        data = _extract_compas_json(out.read_text(encoding="utf-8"))
+        assert data["seance_actuelle"] == 2
+        assert data["seances_total"] == 2
+        assert data["heure_debut"] == "8h00"
+        assert data["heure_fin"] == "12h00"
+
+    def test_student_structure(self, populated_db, tmp_path):
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        data = _extract_compas_json(out.read_text(encoding="utf-8"))
+        alice = next(s for s in data["students"] if s["name"] == "Dupont Alice")
+        for key in ("name", "display_name", "anon", "scores", "trend", "rank", "presence"):
+            assert key in alice, f"Clé manquante dans student : {key!r}"
+        for key in ("auto", "rig", "com", "eng"):
+            assert key in alice["scores"], f"Clé manquante dans scores : {key!r}"
+        for key in ("total", "present", "absent", "retards", "min_retard"):
+            assert key in alice["presence"], f"Clé manquante dans presence : {key!r}"
+
+    def test_student_rank_and_trend_valid_values(self, populated_db, tmp_path):
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        data = _extract_compas_json(out.read_text(encoding="utf-8"))
+        for s in data["students"]:
+            assert s["rank"] in ("or", "argent", "bronze", "alerte"), s["name"]
+            assert s["trend"] in ("up", "down", "stable"), s["name"]
+
+    def test_alice_ema_scores(self, populated_db, tmp_path):
+        """EMA d'Alice : S1 auto=1 → S2 auto=2 donne 0.4*2+0.6*1=1.4."""
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        data = _extract_compas_json(out.read_text(encoding="utf-8"))
+        alice = next(s for s in data["students"] if s["name"] == "Dupont Alice")
+        assert alice["scores"]["auto"] == pytest.approx(1.4)
+        # S1 rig=2 → S2 rig=1 : 0.4*1+0.6*2=1.6
+        assert alice["scores"]["rig"] == pytest.approx(1.6)
+
+    def test_alice_presence_stats(self, populated_db, tmp_path):
+        """Alice présente aux 2 séances, 0 retard, 0 absence."""
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        data = _extract_compas_json(out.read_text(encoding="utf-8"))
+        alice = next(s for s in data["students"] if s["name"] == "Dupont Alice")
+        assert alice["presence"]["total"] == 2
+        assert alice["presence"]["present"] == 2
+        assert alice["presence"]["absent"] == 0
+        assert alice["presence"]["retards"] == 0
+
+    def test_bob_presence_with_retard(self, populated_db, tmp_path):
+        """Bob a un retard de 15 min en S1 (R:15)."""
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        data = _extract_compas_json(out.read_text(encoding="utf-8"))
+        bob = next(s for s in data["students"] if s["name"] == "Martin Bob")
+        assert bob["presence"]["retards"] == 1
+        assert bob["presence"]["min_retard"] == 15
+
+    def test_db_not_found_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            generate(tmp_path / "inexistant.db", tmp_path / "out.html")
+
+    def test_safe_json_escaping(self, populated_db, tmp_path):
+        """La séquence '</' est échappée en '<\\/' dans le HTML brut."""
+        out = tmp_path / "dashboard.html"
+        generate(populated_db, out)
+        raw = out.read_text(encoding="utf-8")
+        # Vérifie que la balise </script> n'est pas fermée prématurément dans le bloc JSON
+        script_block = re.search(r"var COMPAS_DATA = {.*?};", raw, re.DOTALL)
+        assert script_block, "Bloc COMPAS_DATA introuvable"
+        assert "</" not in script_block.group(0)

@@ -112,3 +112,12 @@ def test_xlsx(tmp_path: Path) -> Path:
 def test_db_path(tmp_path: Path) -> Path:
     """Chemin vers une base SQLite temporaire (répertoire créé, fichier absent)."""
     return tmp_path / "output" / "compas.db"
+
+
+@pytest.fixture
+def populated_db(test_xlsx: Path, test_db_path: Path) -> Path:
+    """Base SQLite alimentée avec le workbook de test (import_all déjà exécuté)."""
+    from compas.importer import import_all
+
+    import_all(test_xlsx.parent, test_db_path)
+    return test_db_path

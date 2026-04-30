@@ -320,7 +320,8 @@ def _upsert_etudiant(
         return etudiant_id
 
     cursor = conn.execute(
-        "INSERT INTO etudiants (nom, groupe, ine, anonyme, pseudo, date_depart) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO etudiants (nom, groupe, ine, anonyme, pseudo, date_depart)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
         (nom, groupe, ine, anonyme, pseudo, date_depart),
     )
     etudiant_id = cursor.lastrowid
