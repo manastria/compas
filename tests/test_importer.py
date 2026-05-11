@@ -143,7 +143,7 @@ class TestParseConfig:
         _, _, etudiants = _parse_config(wb["Config"])
         alice = etudiants[0]
         assert alice["nom"] == "Dupont Alice"
-        assert alice["ine"] == "INE001"
+        assert alice["ine"] == "233303259HE"
         assert alice["anonyme"] == 0
         assert alice["pseudo"] is None
         assert alice["date_depart"] is None
@@ -152,7 +152,7 @@ class TestParseConfig:
         wb = make_workbook()
         _, _, etudiants = _parse_config(wb["Config"])
         bob = etudiants[1]
-        assert bob["ine"] == "INE002"
+        assert bob["ine"] == "070288524AE"
         assert bob["anonyme"] == 1
         assert bob["pseudo"] == "BobM"
 

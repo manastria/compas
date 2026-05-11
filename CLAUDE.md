@@ -26,6 +26,7 @@ compas/
 │       ├── importer.py         # Lecture xlsx → SQLite
 │       ├── ema.py              # Calcul EMA et tendances
 │       ├── dashboard.py        # Génération HTML depuis SQLite
+│       ├── validator.py        # Validation de conformité des fichiers xlsx
 │       └── templates/
 │           └── dashboard.html  # Template Jinja2
 ├── data/                       # Fichiers xlsx (non versionné, dans .gitignore)
@@ -33,10 +34,14 @@ compas/
 ├── output/                     # Fichiers générés (non versionné)
 │   ├── compas.db
 │   └── dashboard.html
+├── scripts/
+│   └── generate_test_data.py   # Générateur de données de test (Faker)
 └── tests/
     ├── __init__.py
+    ├── conftest.py
     ├── test_importer.py
     ├── test_ema.py
+    ├── test_validator.py
     └── fixtures/
         └── test_projet.xlsx    # Fichier xlsx de test
 ```

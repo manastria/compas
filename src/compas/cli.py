@@ -58,6 +58,63 @@ def _cmd_build(args: argparse.Namespace) -> int:
     return _cmd_dashboard(args)
 
 
+def _cmd_validate(args: argparse.Namespace) -> int:
+    from compas.validator import Severity, validate_xlsx
+
+    targets: list[Path] = []
+    for path_str in args.paths:
+        p = Path(path_str)
+        if p.is_dir():
+            targets.extend(sorted(p.glob("*.xlsx")))
+        elif p.exists():
+            targets.append(p)
+        else:
+            logging.getLogger(__name__).error("Fichier ou dossier introuvable : %s", p)
+            return 1
+
+    if not targets:
+        logging.getLogger(__name__).warning("Aucun fichier xlsx trouvé.")
+        return 0
+
+    total_errors = 0
+    total_warnings = 0
+
+    for xlsx_path in targets:
+        issues = validate_xlsx(xlsx_path)
+        errors = sum(1 for i in issues if i.severity == Severity.ERROR)
+        warnings = sum(1 for i in issues if i.severity == Severity.WARNING)
+        total_errors += errors
+        total_warnings += warnings
+
+        print(f"\nValidation : {xlsx_path}")
+        if not issues:
+            print("  OK — aucun problème détecté")
+        else:
+            for issue in issues:
+                print(f"  {issue}")
+            parts = []
+            if errors:
+                parts.append(f"{errors} erreur(s)")
+            if warnings:
+                parts.append(f"{warnings} avertissement(s)")
+            print(f"  → {', '.join(parts)}")
+
+    if len(targets) > 1:
+        parts = []
+        if total_errors:
+            parts.append(f"{total_errors} erreur(s)")
+        if total_warnings:
+            parts.append(f"{total_warnings} avertissement(s)")
+        summary = ", ".join(parts) if parts else "aucun problème"
+        print(f"\nRésumé : {len(targets)} fichier(s) — {summary}")
+
+    if total_errors > 0:
+        return 1
+    if getattr(args, "strict", False) and total_warnings > 0:
+        return 1
+    return 0
+
+
 def main() -> None:
     """Point d'entrée principal du CLI Compas."""
     parser = argparse.ArgumentParser(
@@ -122,6 +179,21 @@ def main() -> None:
         help="Ouvrir le dashboard dans le navigateur après génération",
     )
     p_build.set_defaults(func=_cmd_build)
+
+    # ── Sous-commande : validate ────────────────────────────────────────────
+    p_val = sub.add_parser("validate", help="Vérifier la conformité de fichiers xlsx")
+    p_val.add_argument(
+        "paths",
+        nargs="+",
+        metavar="FILE_OR_DIR",
+        help="Fichier(s) .xlsx ou dossier(s) à valider",
+    )
+    p_val.add_argument(
+        "--strict",
+        action="store_true",
+        help="Considérer les avertissements comme des erreurs (code retour 1)",
+    )
+    p_val.set_defaults(func=_cmd_validate)
 
     args = parser.parse_args()
     _setup_logging(args.verbose)
