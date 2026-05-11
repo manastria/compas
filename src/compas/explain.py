@@ -34,6 +34,12 @@ def _fmt_val(v: int | None) -> str:
     return "—" if v is None else f"{v:+d}"
 
 
+def _ema_to_pct(v: float | None) -> str:
+    if v is None:
+        return "—"
+    return f"{round(max(0, min(100, ((v + 2) / 4) * 100))) } %"
+
+
 def generate_explain(
     db_path: Path,
     name_query: str,
@@ -140,6 +146,96 @@ def generate_explain(
         "",
     ]
 
+    # --- Calcul de la progression séance par séance ---
+    _THRESHOLD = 0.05
+    _crit_emas: dict[str, float | None] = {sk: None for _, sk, _ in _CRITERIA}
+    per_session: list[dict] = []
+
+    for r in releves_list:
+        raw = {dc: r[dc] for dc, _, _ in _CRITERIA}
+
+        for dc, sk, _ in _CRITERIA:
+            val = r[dc]
+            if val is not None:
+                _crit_emas[sk] = (
+                    float(val) if _crit_emas[sk] is None
+                    else alpha * float(val) + one_minus_alpha * _crit_emas[sk]
+                )
+
+        obs = [v for v in _crit_emas.values() if v is not None]
+        score_global = sum(obs) / len(obs) if obs else None
+
+        # Tendance : compare le score global avec celui de la séance précédente
+        prev_scores = [ps["score_global"] for ps in per_session if ps["score_global"] is not None]
+        prev_score = prev_scores[-1] if prev_scores else None
+
+        if prev_score is None or score_global is None:
+            tendency, variation_str = "—", "—"
+        else:
+            delta = score_global - prev_score
+            delta_pct = delta * 25  # 1 unité [-2;+2] = 25 %
+            variation_str = f"${delta_pct:+.1f}\\,\\%$"
+            tendency = (
+                "↑ hausse" if delta > _THRESHOLD
+                else "↓ baisse" if delta < -_THRESHOLD
+                else "→ stable"
+            )
+
+        per_session.append({
+            "seance": r["seance"],
+            "date": _fmt_date(r["date"]),
+            "raw": raw,
+            "emas": dict(_crit_emas),
+            "score_global": score_global,
+            "variation": variation_str,
+            "tendency": tendency,
+        })
+
+    # --- Section : Évolution séance par séance ---
+    lines += [
+        "## Évolution séance par séance",
+        "",
+        "### Valeurs observées",
+        "",
+        "Valeurs brutes saisies sur la feuille de séance"
+        " ($-2$ à $+2$, ou — si non observé).",
+        "",
+        "| Séance | Date | Autonomie | Rigueur | Communication | Engagement |",
+        "| ------ | ---- | --------- | ------- | ------------- | ---------- |",
+    ]
+    for ps in per_session:
+        cells = " | ".join(_fmt_val(ps["raw"][dc]) for dc, _, _ in _CRITERIA)
+        lines.append(f"| S{ps['seance']} | {ps['date']} | {cells} |")
+
+    threshold_pct = _THRESHOLD * 25
+    lines += [
+        "",
+        "### Score par critère et tendance",
+        "",
+        "L'EMA de chaque critère est mise à jour après chaque séance observée."
+        " Le **score global** est la moyenne des quatre EMA convertie en pourcentage."
+        " La **tendance** (↑ ↓ →) compare le score global de la séance courante"
+        " avec celui de la séance précédente.",
+        "",
+        f"Seuil : $|\\Delta| > {threshold_pct:.2g}\\,\\%$"
+        f" (soit $\\pm {_THRESHOLD}$ sur l'échelle $[-2\\,;\\,+2]$).",
+        "",
+        "| Séance | Autonomie | Rigueur | Communication | Engagement"
+        " | Score global | Variation | Tendance |",
+        "| ------ | --------- | ------- | ------------- | ----------"
+        " | ------------ | --------- | -------- |",
+    ]
+    for ps in per_session:
+        pcts = " | ".join(_ema_to_pct(ps["emas"][sk]) for _, sk, _ in _CRITERIA)
+        global_pct = _ema_to_pct(ps["score_global"])
+        lines.append(
+            f"| S{ps['seance']} | {pcts} | **{global_pct}**"
+            f" | {ps['variation']} | {ps['tendency']} |"
+        )
+
+    lines += ["", "---", ""]
+
+    # --- Détail par critère ---
     final_emas: dict[str, float | None] = {}
 
     for db_col, short_key, label in _CRITERIA:

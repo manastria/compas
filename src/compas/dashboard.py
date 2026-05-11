@@ -11,7 +11,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from compas.ema import compute_ema, compute_rank, compute_trend
+from compas.ema import compute_ema, compute_rank
 
 logger = logging.getLogger(__name__)
 
@@ -202,18 +202,34 @@ def _student_data(
     Returns:
         Dict prêt pour injection dans le template JS.
     """
-    # EMA par critère
+    # EMA par critère + score global cumulé par séance
     scores: dict[str, float | None] = {}
     for crit, key in zip(_CRITERIA, _CRITERIA_KEYS):
         obs: list[tuple[int, int | None]] = [(r["seance"], r[crit]) for r in releves]
         scores[key] = compute_ema(obs, alpha)
 
-    # Tendance globale : calculée sur la moyenne des scores non-NULL par séance
-    seance_means: list[tuple[int, float | None]] = []
-    for r in releves:
-        vals = [r[c] for c in _CRITERIA if r.get(c) is not None]
-        seance_means.append((r["seance"], sum(vals) / len(vals) if vals else None))
-    trend = compute_trend(seance_means, alpha)
+    # Tendance : compare le score global (moyenne des EMA par critère) entre
+    # la séance courante et la précédente — même valeur que celle affichée.
+    crit_running: dict[str, float | None] = {c: None for c in _CRITERIA}
+    session_scores: list[float | None] = []
+    for r in sorted(releves, key=lambda x: x["seance"]):
+        for crit in _CRITERIA:
+            val = r.get(crit)
+            if val is not None:
+                prev = crit_running[crit]
+                crit_running[crit] = (
+                    float(val) if prev is None
+                    else alpha * float(val) + (1.0 - alpha) * prev
+                )
+        obs_vals = [v for v in crit_running.values() if v is not None]
+        session_scores.append(sum(obs_vals) / len(obs_vals) if obs_vals else None)
+
+    non_null = [v for v in session_scores if v is not None]
+    if len(non_null) < 2:
+        trend = "stable"
+    else:
+        delta = non_null[-1] - non_null[-2]
+        trend = "up" if delta > 0.05 else "down" if delta < -0.05 else "stable"
 
     if etudiant.get("anonyme"):
         display_name = etudiant.get("pseudo") or "Étudiant anonyme"
