@@ -26,15 +26,19 @@ compas/
 │       ├── cli.py              # Point d'entrée CLI
 │       ├── importer.py         # Lecture xlsx → SQLite
 │       ├── ema.py              # Calcul EMA et tendances
-│       ├── dashboard.py        # Génération HTML depuis SQLite
+│       ├── dashboard.py        # Génération du dashboard HTML collectif
+│       ├── fiche.py            # Génération des fiches individuelles HTML
+│       ├── presence_desc.py    # Traduction codes présence → texte lisible
 │       ├── validator.py        # Validation de conformité des fichiers xlsx
 │       └── templates/
-│           └── dashboard.html  # Template Jinja2
+│           ├── dashboard.html  # Template Jinja2 du dashboard collectif
+│           └── fiche.html      # Template Jinja2 des fiches individuelles
 ├── data/                       # Fichiers xlsx (non versionné, dans .gitignore)
 │   └── *.xlsx
 ├── output/                     # Fichiers générés (non versionné)
 │   ├── compas.db
-│   └── dashboard.html
+│   ├── dashboard.html
+│   └── fiches/                 # Une fiche HTML par étudiant actif
 ├── scripts/
 │   └── generate_test_data.py   # Générateur de données de test (Faker)
 └── tests/
@@ -43,6 +47,7 @@ compas/
     ├── test_importer.py
     ├── test_ema.py
     ├── test_validator.py
+    ├── test_fiche.py
     └── fixtures/
         └── test_projet.xlsx    # Fichier xlsx de test
 ```
@@ -66,8 +71,17 @@ poetry run compas import
 # Générer le dashboard HTML depuis la base
 poetry run compas dashboard
 
-# Les deux à la suite (raccourci)
+# Générer toutes les fiches individuelles
+poetry run compas fiches
+
+# Générer la fiche d'un seul étudiant (fragment de nom, insensible à la casse)
+poetry run compas fiches --name Dupont
+
+# Import + dashboard + fiches (raccourci)
 poetry run compas build
+
+# Import + dashboard sans fiches
+poetry run compas build --skip-fiches
 
 # Mode verbeux (flag global avant la sous-commande)
 poetry run compas -v build
@@ -376,18 +390,74 @@ Exemples de correspondance :
 
 Cette règle s'applique partout : tooltip du dashboard, rapports, et tout futur document. **Seule la commande `explain` peut afficher les valeurs brutes** (−2/+2 et EMA décimale), car son rôle est précisément d'expliquer comment le score en pourcentage est obtenu.
 
+## Fiche individuelle (compas fiches)
+
+Le module `fiche.py` génère une fiche HTML autonome par étudiant actif dans `output/fiches/`.
+
+### Données injectées (COMPAS_FICHE_DATA)
+
+```javascript
+var COMPAS_FICHE_DATA = {
+  student: {
+    name: "Dupont Alice",
+    display_name: "Dupont Alice",  // pseudo si anonyme
+    groupe: "TP1",
+    rank: "or",
+    presence: {
+      total: 6, present: 5, absent: 1,
+      retards_r: 1, retards_rr: 0,     // R et RR séparés
+      min_r: 10, min_rr: 0,
+      taux: 83
+    }
+  },
+  scores: {
+    auto: { ema: 0.62, trend: "up" },
+    rig:  { ema: 0.41, trend: "stable" },
+    com:  { ema: 0.78, trend: "up" },
+    eng:  { ema: 0.53, trend: "up" }
+  },
+  history: [
+    { date: "27/03", seance: "S1", pres: "P", auto: 0, rig: -1, com: 1, eng: 0, comment: "" }
+  ],
+  ema_history: [
+    { seance: "S1", auto: 0.00, rig: -1.00, com: 1.00, eng: 0.00 }
+    // entrée uniquement si au moins un critère observé
+  ],
+  events: [
+    { date: "24/04", criteria: "Communication", value: 2, comment: "Aide spontanée" }
+  ],
+  pres_events: [
+    { date: "03/04", code: "R:10", desc: "Retard de 10 min en début de cours" }
+  ],
+  projects: [
+    { name: "Infrastructure réseau PME", rank: "or", trend: "up" }
+    // vide si l'étudiant ne participe qu'à un seul projet
+  ]
+};
+```
+
+### Module presence_desc
+
+`presence_desc.py` expose `describe_presence(code)` qui traduit un code brut en description française lisible. Exemples :
+
+| Code | Description |
+|------|-------------|
+| `R:15` | Retard de 15 min en début de cours |
+| `RR:10:discussion` | Retard de 10 min après la récréation — motif : discussion |
+| `A:H1-H2` | Absent heures 1-2 |
+| `A:9h15-10h00` | Absent de 9h15 à 10h00 |
+| `D:10h15:medical` | Départ définitif à 10h15 — motif : medical |
+| `R:5,RR:10` | Retard de 5 min en début de cours + Retard de 10 min après la récréation |
+
 ## Évolutions prévues
 
 - **Projet Assiduité** : projet frère avec la même stack technique, syntaxe de présence partagée, croisement des données par INE
-- **Dashboard compact vidéoprojeté** : grille de cartes avec histogrammes verticaux (en cours)
-- **Fiche individuelle par étudiant** : vue détaillée avec historique des séances
 - **Rangs gamifiés** : seuils et badges à définir
 
 ## Ce qui est hors scope pour la v1
 
 - Interface web / serveur
 - Commutateur dark mode dans le dashboard (utilise `prefers-color-scheme` du système)
-- Fiche individuelle par étudiant
 - Gamification avancée (badges spéciaux, objectifs de groupe)
 - Traduction en note semestrielle
 - Impact de la présence sur les scores

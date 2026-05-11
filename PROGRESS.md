@@ -41,7 +41,7 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 
 ## P3 - Évolutions prévues
 
-- [ ] Fiche individuelle par étudiant (historique détaillé)
+- [x] Fiche individuelle par étudiant (historique détaillé)
 - [ ] Projet Assiduité (croisement via INE)
 - [ ] Rangs gamifiés (seuils et badges)
 
@@ -53,6 +53,14 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 - [ ] Pas d’impact de la présence sur les scores
 
 ## Journal de session
+
+## Session - 2026-05-11 (P3 — Fiche individuelle par étudiant)
+
+- **Objectif** — Implémenter la commande `compas fiches` : fiche HTML individuelle par étudiant actif.
+- **Réalisé** — `presence_desc.py` : `describe_presence()` traduit les codes présence en français (syntaxe TYPE:valeur:motif, combinaisons par virgule) ; `fiche.py` : `compute_student_data`, `generate_fiche`, `generate_all_fiches` avec EMA history, events, pres_events, inter-projets, stats présence R/RR séparées ; `templates/fiche.html` : template Jinja2 adapté du prototype (Chart.js CDN, `scorePct` corrigé en échelle [-2,+2], barColor aligné) ; `cli.py` : commande `fiches` + option `--skip-fiches` dans `build` ; `test_fiche.py` : 40 tests (23 presence_desc + 17 fiche).
+- **Vérifications** — `ruff check` OK ; `pytest` 256 passed, 40 nouveaux, 2 échecs préexistants dans test_dashboard.py (non liés).
+- **Risques/notes** — Pour un étudiant multi-projets, l'EMA globale est calculée sur la séquence ordonnée par date (index enuméré), pas par numéro de séance, pour éviter les doublons de numéros entre projets. La section inter-projets est masquée si l'étudiant n'a qu'un projet.
+- **Prochaines actions** — Valider le rendu de la fiche en conditions réelles (projection) ; démarrer projet Assiduité ou gamification.
 
 ## Session - 2026-04-30 (suite — P2 Dashboard compact vidéoprojeté)
 

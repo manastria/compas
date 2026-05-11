@@ -70,18 +70,24 @@ compas/
 │       ├── cli.py              # Point d'entrée CLI
 │       ├── importer.py         # Lecture xlsx → SQLite
 │       ├── ema.py              # Calcul EMA et tendances
-│       ├── dashboard.py        # Génération HTML
+│       ├── dashboard.py        # Génération du dashboard HTML collectif
+│       ├── fiche.py            # Génération des fiches individuelles HTML
+│       ├── presence_desc.py    # Traduction codes présence → texte lisible
 │       ├── validator.py        # Validation de conformité xlsx
 │       └── templates/
-│           └── dashboard.html  # Template Jinja2
+│           ├── dashboard.html  # Template Jinja2 du dashboard collectif
+│           └── fiche.html      # Template Jinja2 des fiches individuelles
 ├── data/                       # Fichiers xlsx (non versionné)
 ├── output/                     # Fichiers générés (non versionné)
+│   ├── dashboard.html
+│   └── fiches/                 # Une fiche HTML par étudiant actif
 ├── scripts/
 │   └── generate_test_data.py   # Générateur de données de test
 └── tests/
     ├── test_importer.py
     ├── test_ema.py
     ├── test_validator.py
+    ├── test_fiche.py
     └── fixtures/
         └── test_projet.xlsx
 ```
@@ -322,13 +328,38 @@ Lit la base SQLite, calcule les EMA, tendances et rangs, et écrit le fichier HT
 | `--alpha ALPHA` | `0.4` | Coefficient de lissage EMA (entre 0 et 1) |
 | `--open` | — | Ouvrir le dashboard dans le navigateur après génération |
 
+#### Générer les fiches individuelles
+
+```bash
+poetry run compas fiches
+```
+
+Génère un fichier HTML par étudiant actif dans `output/fiches/`. Chaque fiche présente l'historique complet séance par séance, les jauges EMA avec tendance, les statistiques de présence détaillées (retards début de cours vs récréation séparés) et un graphe d'évolution.
+
+```bash
+# Générer uniquement la fiche d'un étudiant (fragment de nom, insensible à la casse)
+poetry run compas fiches --name Dupont
+```
+
+| Option | Défaut | Description |
+|--------|--------|-------------|
+| `--db FILE` | `output/compas.db` | Chemin de la base SQLite |
+| `--out DIR` | `output/fiches/` | Dossier de sortie des fiches |
+| `--alpha ALPHA` | `0.4` | Coefficient de lissage EMA (entre 0 et 1) |
+| `--name NOM` | — | Filtrer par nom ou fragment de nom |
+
 #### Tout en une commande
 
 ```bash
 poetry run compas build
 ```
 
-Enchaîne l'import et la génération du dashboard. Accepte les mêmes options que `import` et `dashboard`.
+Enchaîne l'import, la génération du dashboard et la génération des fiches individuelles. L'option `--skip-fiches` permet d'omettre les fiches.
+
+| Option | Défaut | Description |
+|--------|--------|-------------|
+| (toutes les options `import` et `dashboard`) | | |
+| `--skip-fiches` | — | Ne pas générer les fiches individuelles |
 
 #### Expliquer le calcul EMA d'un étudiant
 

@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compas — Fiche individuelle</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-page: #f4f3ef;
+      --bg-card: #ffffff;
+      --bg-surface: #eae9e4;
+      --bg-bar-track: #e8e7e2;
+      --bg-table-alt: #fafaf8;
+      --text-primary: #1a1a1a;
+      --text-secondary: #6b6b68;
+      --text-tertiary: #9a9a96;
+      --border-light: rgba(0, 0, 0, 0.08);
+      --border-medium: rgba(0, 0, 0, 0.12);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font: "Söhne", system-ui, -apple-system, sans-serif;
+
+      --red: #E24B4A;
+      --orange: #EF9F27;
+      --amber: #BA7517;
+      --green: #639922;
+      --teal: #1D9E75;
+
+      --rank-or-bg: #FAEEDA; --rank-or-text: #854F0B; --rank-or-border: #FAC775;
+      --rank-argent-bg: #F1EFE8; --rank-argent-text: #5F5E5A; --rank-argent-border: #D3D1C7;
+      --rank-bronze-bg: #FAECE7; --rank-bronze-text: #993C1D; --rank-bronze-border: #F5C4B3;
+      --rank-alerte-bg: #FCEBEB; --rank-alerte-text: #A32D2D; --rank-alerte-border: #F7C1C1;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-page: #1a1a1a;
+        --bg-card: #2a2a2a;
+        --bg-surface: #222222;
+        --bg-bar-track: #3a3a3a;
+        --bg-table-alt: #2f2f2f;
+        --text-primary: #e8e8e4;
+        --text-secondary: #a0a09c;
+        --text-tertiary: #707070;
+        --border-light: rgba(255, 255, 255, 0.08);
+        --border-medium: rgba(255, 255, 255, 0.12);
+      }
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-page);
+      color: var(--text-primary);
+      line-height: 1.5;
+      padding: 1.5rem;
+    }
+
+    .page { max-width: 820px; margin: 0 auto; }
+
+    /* ── Carte générique ── */
+    .card {
+      background: var(--bg-card);
+      border: 0.5px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    /* ── En-tête étudiant ── */
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .student-name {
+      font-size: 24px;
+      font-weight: 500;
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 12px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .header-meta {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* ── Jauges ── */
+    .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 600px) { .gauges { grid-template-columns: 1fr; } }
+
+    .gauge-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .gauge-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      width: 120px;
+      flex-shrink: 0;
+    }
+
+    .gauge-track {
+      flex: 1;
+      height: 16px;
+      background: var(--bg-bar-track);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .gauge-fill { height: 100%; border-radius: 8px; }
+
+    .gauge-value {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .gauge-trend {
+      font-size: 13px;
+      min-width: 16px;
+      text-align: center;
+    }
+
+    .trend-up { color: var(--teal); }
+    .trend-down { color: var(--red); }
+    .trend-stable { color: var(--text-tertiary); }
+
+    /* ── Présence résumé ── */
+    .pres-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+    }
+
+    .pres-stat {
+      text-align: center;
+      padding: 10px;
+      background: var(--bg-surface);
+      border-radius: var(--radius-md);
+    }
+
+    .pres-stat-value {
+      font-size: 22px;
+      font-weight: 500;
+    }
+
+    .pres-stat-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+    }
+
+    /* ── Courbe ── */
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 220px;
+    }
+
+    .chart-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .chart-legend {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .chart-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .chart-legend-dot {
+      width: 10px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    /* ── Événements remarquables ── */
+    .event-list { list-style: none; }
+
+    .event-item {
+      display: flex;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 0.5px solid var(--border-light);
+      font-size: 13px;
+    }
+
+    .event-item:last-child { border-bottom: none; }
+
+    .event-date {
+      color: var(--text-tertiary);
+      flex-shrink: 0;
+      width: 60px;
+    }
+
+    .event-badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 1px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .event-badge-pos { background: #EAF3DE; color: #3B6D11; }
+    .event-badge-neg { background: #FCEBEB; color: #A32D2D; }
+
+    .event-text { color: var(--text-primary); }
+
+    /* ── Tableau détail ── */
+    .detail-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .detail-table th {
+      text-align: left;
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border-medium);
+    }
+
+    .detail-table th.center { text-align: center; }
+
+    .detail-table td {
+      padding: 7px 10px;
+      border-bottom: 0.5px solid var(--border-light);
+      vertical-align: top;
+    }
+
+    .detail-table td.center { text-align: center; }
+
+    .detail-table tr:nth-child(even) td { background: var(--bg-table-alt); }
+
+    .detail-table tr.absent td { opacity: 0.5; }
+
+    .score-cell { font-weight: 500; }
+    .score-pos { color: var(--teal); }
+    .score-neg { color: var(--red); }
+    .score-zero { color: var(--text-tertiary); }
+    .score-null { color: var(--text-tertiary); }
+
+    .comment-cell {
+      font-size: 12px;
+      color: var(--text-secondary);
+      max-width: 200px;
+    }
+
+    /* ── Présence détaillée ── */
+    .pres-detail-list { list-style: none; }
+
+    .pres-detail-item {
+      display: flex;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 0.5px solid var(--border-light);
+      font-size: 13px;
+    }
+
+    .pres-detail-item:last-child { border-bottom: none; }
+
+    .pres-detail-date {
+      color: var(--text-tertiary);
+      flex-shrink: 0;
+      width: 60px;
+    }
+
+    .pres-detail-code { font-weight: 500; flex-shrink: 0; }
+    .pres-detail-desc { color: var(--text-secondary); }
+
+    /* ── Inter-projets ── */
+    .project-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 0.5px solid var(--border-light);
+      font-size: 13px;
+    }
+
+    .project-row:last-child { border-bottom: none; }
+    .project-name { font-weight: 500; }
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- En-tête -->
+  <div class="card">
+    <div class="header-row">
+      <div>
+        <div class="student-name">Dupont Alice</div>
+        <div class="header-meta">Groupe TP1 &mdash; BTS SIO SISR 1</div>
+      </div>
+      <div class="header-badges">
+        <span class="badge" id="rank-badge"></span>
+        <span class="badge" id="pres-badge"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Jauges -->
+  <div class="card">
+    <div class="card-title">&Eacute;tat actuel</div>
+    <div class="gauges" id="gauges"></div>
+  </div>
+
+  <!-- Présence résumé -->
+  <div class="card">
+    <div class="card-title">Pr&eacute;sence</div>
+    <div class="pres-grid" id="pres-grid"></div>
+  </div>
+
+  <!-- Courbe d'évolution -->
+  <div class="card">
+    <div class="card-title">&Eacute;volution s&eacute;ance par s&eacute;ance</div>
+    <div class="chart-container"><canvas id="chart"></canvas></div>
+    <div class="chart-legend" id="chart-legend"></div>
+  </div>
+
+  <!-- Événements remarquables -->
+  <div class="card">
+    <div class="card-title">&Eacute;v&eacute;nements remarquables</div>
+    <ul class="event-list" id="events"></ul>
+  </div>
+
+  <!-- Détail séance par séance -->
+  <div class="card">
+    <div class="card-title">D&eacute;tail des s&eacute;ances</div>
+    <div style="overflow-x: auto;">
+      <table class="detail-table" id="detail-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>S&eacute;ance</th>
+            <th>Pr&eacute;sence</th>
+            <th class="center">Au</th>
+            <th class="center">Ri</th>
+            <th class="center">Co</th>
+            <th class="center">En</th>
+            <th>Commentaire</th>
+          </tr>
+        </thead>
+        <tbody id="detail-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Présence détaillée -->
+  <div class="card">
+    <div class="card-title">D&eacute;tail des absences et retards</div>
+    <ul class="pres-detail-list" id="pres-details"></ul>
+  </div>
+
+  <!-- Inter-projets -->
+  <div class="card">
+    <div class="card-title">Comparaison inter-projets</div>
+    <div id="projects"></div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  DONNÉES FICTIVES
+// ══════════════════════════════════════════════════════════
+
+var DATA = {
+  student: {
+    name: "Dupont Alice",
+    groupe: "TP1",
+    classe: "BTS SIO SISR 1",
+    rank: "or",
+    presence: { total: 6, present: 5, absent: 1, retards_r: 1, retards_rr: 1, min_r: 10, min_rr: 15, taux: 83 }
+  },
+  scores: {
+    auto: { ema: 0.62, trend: "up" },
+    rig:  { ema: 0.41, trend: "stable" },
+    com:  { ema: 0.78, trend: "up" },
+    eng:  { ema: 0.53, trend: "up" }
+  },
+  history: [
+    { date: "27/03", seance: "S1", pres: "P",                   auto: 0,  rig: -1, com: 1,    eng: 0,    comment: "" },
+    { date: "03/04", seance: "S2", pres: "R:10",                auto: 0,  rig: 0,  com: 0,    eng: 0,    comment: "" },
+    { date: "10/04", seance: "S3", pres: "A:medical",           auto: null, rig: null, com: null, eng: null, comment: "Absent justifi\u00e9" },
+    { date: "17/04", seance: "S4", pres: "P",                   auto: 1,  rig: 1,  com: 1,    eng: 1,    comment: "" },
+    { date: "24/04", seance: "S5", pres: "R:5,RR:15",           auto: 1,  rig: 0,  com: 2,    eng: 1,    comment: "Aide spontan\u00e9e envers Martin" },
+    { date: "01/05", seance: "S6", pres: "P",                   auto: 1,  rig: 1,  com: 1,    eng: 1,    comment: "" }
+  ],
+  ema_history: [
+    { seance: "S1", auto: 0.00, rig: -1.00, com: 1.00, eng: 0.00 },
+    { seance: "S2", auto: 0.00, rig: -0.60, com: 0.60, eng: 0.00 },
+    { seance: "S4", auto: 0.40, rig: 0.04, com: 0.76, eng: 0.40 },
+    { seance: "S5", auto: 0.64, rig: 0.02, com: 1.26, eng: 0.64 },
+    { seance: "S6", auto: 0.78, rig: 0.41, com: 1.08, eng: 0.78 }
+  ],
+  events: [
+    { date: "24/04", criteria: "Communication", value: 2, comment: "Aide spontan\u00e9e envers Martin" },
+    { date: "27/03", criteria: "Rigueur", value: -1, comment: "Fichiers mal nomm\u00e9s, poste d\u00e9sorganis\u00e9" }
+  ],
+  pres_events: [
+    { date: "03/04", code: "R:10", desc: "Retard de 10 min en d\u00e9but de cours" },
+    { date: "10/04", code: "A:medical", desc: "Absent toute la s\u00e9ance \u2014 motif m\u00e9dical" },
+    { date: "24/04", code: "R:5,RR:15", desc: "Retard 5 min (d\u00e9but) + 15 min (r\u00e9cr\u00e9ation)" }
+  ],
+  projects: [
+    { name: "Infrastructure r\u00e9seau PME", rank: "or", trend: "up" },
+    { name: "S\u00e9curisation serveur Debian", rank: "argent", trend: "stable" }
+  ]
+};
+
+// ══════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════
+
+var rankStyles = {
+  or:     { bg: "#FAEEDA", color: "#854F0B", border: "#FAC775", label: "Or" },
+  argent: { bg: "#F1EFE8", color: "#5F5E5A", border: "#D3D1C7", label: "Argent" },
+  bronze: { bg: "#FAECE7", color: "#993C1D", border: "#F5C4B3", label: "Bronze" },
+  alerte: { bg: "#FCEBEB", color: "#A32D2D", border: "#F7C1C1", label: "Alerte" }
+};
+
+var criteriaInfo = [
+  { key: "auto", label: "Autonomie", color: "#2D7DD2" },
+  { key: "rig",  label: "Rigueur", color: "#E8702A" },
+  { key: "com",  label: "Communication", color: "#1D9E75" },
+  { key: "eng",  label: "Engagement", color: "#8B5CF6" }
+];
+
+function scorePct(v) { return Math.round(((Math.max(-1, Math.min(1, v)) + 1) / 2) * 100); }
+
+function barColor(pct) {
+  if (pct <= 20) return "#E24B4A";
+  if (pct <= 40) return "#EF9F27";
+  if (pct <= 60) return "#BA7517";
+  if (pct <= 80) return "#639922";
+  return "#1D9E75";
+}
+
+function trendHTML(t, size) {
+  var s = size || 13;
+  if (t === "up") return '<span class="gauge-trend trend-up" style="font-size:'+s+'px">&#9650;</span>';
+  if (t === "down") return '<span class="gauge-trend trend-down" style="font-size:'+s+'px">&#9660;</span>';
+  return '<span class="gauge-trend trend-stable" style="font-size:'+s+'px">&#9679;</span>';
+}
+
+function scoreHTML(v) {
+  if (v === null || v === undefined) return '<span class="score-cell score-null">&mdash;</span>';
+  var cls = v > 0 ? "score-pos" : v < 0 ? "score-neg" : "score-zero";
+  var sign = v > 0 ? "+" : "";
+  return '<span class="score-cell ' + cls + '">' + sign + v + '</span>';
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════
+
+// Rank badge
+var r = rankStyles[DATA.student.rank];
+var rankBadge = document.getElementById("rank-badge");
+rankBadge.textContent = r.label;
+rankBadge.style.cssText = "background:" + r.bg + ";color:" + r.color + ";border:0.5px solid " + r.border;
+
+// Presence badge
+var p = DATA.student.presence;
+var ptColor = p.taux >= 90 ? "#0F6E56" : p.taux >= 75 ? "#854F0B" : "#A32D2D";
+var ptBg = p.taux >= 90 ? "#E1F5EE" : p.taux >= 75 ? "#FAEEDA" : "#FCEBEB";
+var ptBorder = p.taux >= 90 ? "#9FE1CB" : p.taux >= 75 ? "#FAC775" : "#F7C1C1";
+var presBadge = document.getElementById("pres-badge");
+presBadge.textContent = p.taux + " % pr\u00e9sence";
+presBadge.style.cssText = "background:" + ptBg + ";color:" + ptColor + ";border:0.5px solid " + ptBorder;
+
+// Gauges
+var gaugesEl = document.getElementById("gauges");
+criteriaInfo.forEach(function(c) {
+  var s = DATA.scores[c.key];
+  var pct = scorePct(s.ema);
+  var col = barColor(pct);
+  var sign = s.ema > 0 ? "+" : "";
+  gaugesEl.insertAdjacentHTML("beforeend",
+    '<div class="gauge-item">' +
+      '<span class="gauge-label">' + c.label + '</span>' +
+      '<div class="gauge-track"><div class="gauge-fill" style="width:' + pct + '%;background:' + col + '"></div></div>' +
+      '<span class="gauge-value">' + sign + s.ema.toFixed(2) + '</span>' +
+      trendHTML(s.trend) +
+    '</div>'
+  );
+});
+
+// Presence summary
+var presGrid = document.getElementById("pres-grid");
+var presStats = [
+  { value: p.total, label: "S\u00e9ances" },
+  { value: p.present, label: "Pr\u00e9sences" },
+  { value: p.absent, label: "Absences", color: p.absent > 0 ? "#A32D2D" : null },
+  { value: p.retards_r, label: "Retards (R)", sub: p.min_r + " min" },
+  { value: p.retards_rr, label: "Retards (RR)", sub: p.min_rr + " min" },
+  { value: p.taux + "%", label: "Taux pr\u00e9sence", color: ptColor }
+];
+presStats.forEach(function(s) {
+  var valStyle = s.color ? ' style="color:' + s.color + '"' : '';
+  var subHTML = s.sub ? '<div class="pres-stat-label">' + s.sub + '</div>' : '';
+  presGrid.insertAdjacentHTML("beforeend",
+    '<div class="pres-stat">' +
+      '<div class="pres-stat-value"' + valStyle + '>' + s.value + '</div>' +
+      '<div class="pres-stat-label">' + s.label + '</div>' +
+      subHTML +
+    '</div>'
+  );
+});
+
+// Chart
+var ctx = document.getElementById("chart").getContext("2d");
+var isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+var gridColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+var tickColor = isDark ? "#707070" : "#9a9a96";
+
+var chartLabels = DATA.ema_history.map(function(h) { return h.seance; });
+var datasets = criteriaInfo.map(function(c) {
+  return {
+    label: c.label,
+    data: DATA.ema_history.map(function(h) { return h[c.key]; }),
+    borderColor: c.color,
+    backgroundColor: c.color + "20",
+    borderWidth: 2,
+    pointRadius: 4,
+    pointBackgroundColor: c.color,
+    tension: 0.3,
+    fill: false
+  };
+});
+
+new Chart(ctx, {
+  type: "line",
+  data: { labels: chartLabels, datasets: datasets },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        min: -1.5, max: 1.5,
+        grid: { color: gridColor },
+        ticks: { color: tickColor, font: { size: 11 }, stepSize: 0.5 }
+      },
+      x: {
+        grid: { color: gridColor },
+        ticks: { color: tickColor, font: { size: 11 } }
+      }
+    }
+  }
+});
+
+// Chart legend
+var legendEl = document.getElementById("chart-legend");
+criteriaInfo.forEach(function(c) {
+  legendEl.insertAdjacentHTML("beforeend",
+    '<span class="chart-legend-item"><span class="chart-legend-dot" style="background:' + c.color + '"></span>' + c.label + '</span>'
+  );
+});
+
+// Events
+var eventsEl = document.getElementById("events");
+DATA.events.forEach(function(e) {
+  var isPos = e.value > 0;
+  var badgeCls = isPos ? "event-badge-pos" : "event-badge-neg";
+  var sign = isPos ? "+" : "";
+  eventsEl.insertAdjacentHTML("beforeend",
+    '<li class="event-item">' +
+      '<span class="event-date">' + e.date + '</span>' +
+      '<span class="event-badge ' + badgeCls + '">' + e.criteria + ' ' + sign + e.value + '</span>' +
+      '<span class="event-text">' + e.comment + '</span>' +
+    '</li>'
+  );
+});
+
+// Detail table
+var tbody = document.getElementById("detail-body");
+DATA.history.forEach(function(h) {
+  var isAbsent = h.pres && h.pres.indexOf("A") === 0 && h.pres.indexOf("A:H") === -1 && h.pres.indexOf("A:") !== -1 && /^A(:|$)/.test(h.pres) && !/^A:\d/.test(h.pres) && !/^A:H/.test(h.pres);
+  // Simplified: absent if starts with A and no time range
+  isAbsent = h.pres === "A" || (h.pres && /^A:[a-zA-Z]/.test(h.pres) && h.pres.indexOf("-") === -1);
+  var trClass = isAbsent ? ' class="absent"' : '';
+  var commentHTML = h.comment ? '<span class="comment-cell">' + h.comment + '</span>' : '';
+
+  tbody.insertAdjacentHTML("beforeend",
+    '<tr' + trClass + '>' +
+      '<td>' + h.date + '</td>' +
+      '<td>' + h.seance + '</td>' +
+      '<td>' + (h.pres || 'P') + '</td>' +
+      '<td class="center">' + scoreHTML(h.auto) + '</td>' +
+      '<td class="center">' + scoreHTML(h.rig) + '</td>' +
+      '<td class="center">' + scoreHTML(h.com) + '</td>' +
+      '<td class="center">' + scoreHTML(h.eng) + '</td>' +
+      '<td>' + commentHTML + '</td>' +
+    '</tr>'
+  );
+});
+
+// Presence details
+var presDetails = document.getElementById("pres-details");
+DATA.pres_events.forEach(function(e) {
+  presDetails.insertAdjacentHTML("beforeend",
+    '<li class="pres-detail-item">' +
+      '<span class="pres-detail-date">' + e.date + '</span>' +
+      '<span class="pres-detail-code">' + e.code + '</span>' +
+      '<span class="pres-detail-desc">' + e.desc + '</span>' +
+    '</li>'
+  );
+});
+
+// Projects
+var projectsEl = document.getElementById("projects");
+DATA.projects.forEach(function(p) {
+  var pr = rankStyles[p.rank];
+  projectsEl.insertAdjacentHTML("beforeend",
+    '<div class="project-row">' +
+      '<span class="project-name">' + p.name + '</span>' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span class="badge" style="background:' + pr.bg + ';color:' + pr.color + ';border:0.5px solid ' + pr.border + '">' + pr.label + '</span>' +
+        trendHTML(p.trend) +
+      '</div>' +
+    '</div>'
+  );
+});
+</script>
+
+</body>
+</html>

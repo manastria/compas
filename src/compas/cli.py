@@ -13,6 +13,19 @@ app = typer.Typer(
 )
 
 
+def _parse_cutoff_date(value: str) -> str:
+    """Convertit une date JJ/MM/AAAA ou AAAA-MM-JJ en format ISO AAAA-MM-JJ."""
+    from datetime import datetime
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    raise ValueError(
+        f"Format de date non reconnu : {value!r} (attendu : JJ/MM/AAAA ou AAAA-MM-JJ)"
+    )
+
+
 def _setup_logging(verbose: bool = False) -> None:
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
@@ -76,13 +89,37 @@ def dashboard(
         False, "--open",
         help="Ouvrir le dashboard dans le navigateur après génération",
     ),
+    at_seance: int = typer.Option(
+        0, "--at-seance", metavar="N",
+        help="Vue historique : n'inclure que les séances ≤ N (0 = toutes)",
+    ),
+    at_date: str = typer.Option(
+        "", "--at-date", metavar="DATE",
+        help="Vue historique : n'inclure que les séances jusqu'à cette date"
+             " (JJ/MM/AAAA ou AAAA-MM-JJ)",
+    ),
 ) -> None:
     """Générer le dashboard HTML."""
     from compas.dashboard import generate
 
+    cutoff_seance: int | None = at_seance if at_seance > 0 else None
+    cutoff_date: str | None = None
+    if at_date:
+        try:
+            cutoff_date = _parse_cutoff_date(at_date)
+        except ValueError as exc:
+            logging.getLogger(__name__).error("%s", exc)
+            raise typer.Exit(1)
+    if cutoff_seance and cutoff_date:
+        logging.getLogger(__name__).error(
+            "--at-seance et --at-date sont mutuellement exclusifs"
+        )
+        raise typer.Exit(1)
+
     out_path = Path(out)
     try:
-        generate(Path(db), out_path, alpha=alpha)
+        generate(Path(db), out_path, alpha=alpha,
+                 at_seance=cutoff_seance, at_date=cutoff_date)
     except (FileNotFoundError, ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
         raise typer.Exit(1)
@@ -114,10 +151,37 @@ def build(
         False, "--open",
         help="Ouvrir le dashboard dans le navigateur après génération",
     ),
+    at_seance: int = typer.Option(
+        0, "--at-seance", metavar="N",
+        help="Vue historique : n'inclure que les séances ≤ N (0 = toutes)",
+    ),
+    at_date: str = typer.Option(
+        "", "--at-date", metavar="DATE",
+        help="Vue historique : n'inclure que les séances jusqu'à cette date"
+             " (JJ/MM/AAAA ou AAAA-MM-JJ)",
+    ),
+    skip_fiches: bool = typer.Option(
+        False, "--skip-fiches",
+        help="Ne pas générer les fiches individuelles",
+    ),
 ) -> None:
-    """Importer puis générer le dashboard."""
+    """Importer, générer le dashboard et les fiches individuelles."""
     from compas.importer import import_all
     from compas.dashboard import generate
+
+    cutoff_seance: int | None = at_seance if at_seance > 0 else None
+    cutoff_date: str | None = None
+    if at_date:
+        try:
+            cutoff_date = _parse_cutoff_date(at_date)
+        except ValueError as exc:
+            logging.getLogger(__name__).error("%s", exc)
+            raise typer.Exit(1)
+    if cutoff_seance and cutoff_date:
+        logging.getLogger(__name__).error(
+            "--at-seance et --at-date sont mutuellement exclusifs"
+        )
+        raise typer.Exit(1)
 
     data_dir = Path(data)
     if not data_dir.exists():
@@ -135,7 +199,8 @@ def build(
 
     out_path = Path(out)
     try:
-        generate(Path(db), out_path, alpha=alpha)
+        generate(Path(db), out_path, alpha=alpha,
+                 at_seance=cutoff_seance, at_date=cutoff_date)
     except (FileNotFoundError, ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
         raise typer.Exit(1)
@@ -143,6 +208,44 @@ def build(
     if open_browser:
         import webbrowser
         webbrowser.open(out_path.resolve().as_uri())
+
+    if not skip_fiches:
+        from compas.fiche import generate_all_fiches
+        fiches_dir = Path(out).parent / "fiches"
+        try:
+            generate_all_fiches(Path(db), fiches_dir, alpha=alpha)
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            logging.getLogger(__name__).warning("Fiches ignorées : %s", exc)
+
+
+@app.command()
+def fiches(
+    db: str = typer.Option(
+        "output/compas.db", "--db", metavar="FILE",
+        help="Chemin de la base SQLite (défaut : output/compas.db)",
+    ),
+    out: str = typer.Option(
+        "output/fiches", "--out", metavar="DIR",
+        help="Dossier de sortie pour les fiches (défaut : output/fiches/)",
+    ),
+    alpha: float = typer.Option(
+        0.4, "--alpha", metavar="ALPHA",
+        help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
+    ),
+    name: str = typer.Option(
+        "", "--name", metavar="NOM",
+        help="Filtrer par nom ou fragment de nom (insensible à la casse)",
+    ),
+) -> None:
+    """Générer les fiches HTML individuelles par étudiant actif."""
+    from compas.fiche import generate_all_fiches
+
+    name_filter = name if name else None
+    try:
+        generate_all_fiches(Path(db), Path(out), alpha=alpha, name_filter=name_filter)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        logging.getLogger(__name__).error("%s", exc)
+        raise typer.Exit(1)
 
 
 @app.command()

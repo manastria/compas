@@ -260,6 +260,8 @@ def generate(
     db_path: Path,
     out_path: Path,
     alpha: float = 0.4,
+    at_seance: int | None = None,
+    at_date: str | None = None,
 ) -> None:
     """Lit la base SQLite, calcule les métriques et génère le dashboard HTML.
 
@@ -267,6 +269,9 @@ def generate(
         db_path: Chemin vers la base SQLite existante.
         out_path: Chemin du fichier HTML à écrire.
         alpha: Coefficient de lissage EMA (défaut 0.4).
+        at_seance: Si fourni, n'inclut que les séances ≤ à ce numéro.
+        at_date: Si fourni, n'inclut que les séances dont la date ≤ à cette
+            date (format ISO YYYY-MM-DD).
 
     Raises:
         FileNotFoundError: Si db_path n'existe pas.
@@ -291,18 +296,35 @@ def generate(
                 "Plusieurs projets dans la base — seul « %s » sera affiché", projet_row["nom"]
             )
 
-        seances = conn.execute(
+        all_seances = conn.execute(
             "SELECT DISTINCT seance, date FROM releves WHERE projet_id=? ORDER BY seance",
             (projet_id,),
         ).fetchall()
+
+        # Appliquer le filtre temporel
+        seances = list(all_seances)
+        if at_seance is not None:
+            seances = [s for s in seances if int(s["seance"]) <= at_seance]
+        if at_date is not None:
+            seances = [s for s in seances if s["date"] <= at_date]
+
         if not seances:
-            raise ValueError(f"Aucune séance pour le projet « {projet_row['nom']} »")
+            cutoff = f"séance {at_seance}" if at_seance else at_date
+            raise ValueError(
+                f"Aucune séance avant « {cutoff} »"
+                f" pour le projet « {projet_row['nom']} »"
+            )
+
+        if at_seance is not None or at_date is not None:
+            logger.info(
+                "Vue historique : %d séance(s) sur %d", len(seances), len(all_seances)
+            )
 
         seance_actuelle = int(seances[-1]["seance"])
         date_derniere: str = seances[-1]["date"]
         date_fmt = datetime.strptime(date_derniere, "%Y-%m-%d").strftime("%d/%m/%Y")
 
-        # Heure début/fin de la dernière séance (première ligne suffira)
+        # Heure début/fin de la dernière séance retenue
         last_hours = conn.execute(
             "SELECT heure_debut, heure_fin FROM releves WHERE projet_id=? AND seance=? LIMIT 1",
             (projet_id, seance_actuelle),
@@ -310,7 +332,7 @@ def generate(
         heure_debut_session: str | None = last_hours["heure_debut"] if last_hours else None
         heure_fin_session: str | None = last_hours["heure_fin"] if last_hours else None
 
-        # Étudiants actifs à la date de la dernière séance
+        # Étudiants actifs à la date de la dernière séance retenue
         etudiants = conn.execute(
             """SELECT id, nom, groupe, anonyme, pseudo, date_depart
                FROM etudiants
@@ -322,8 +344,8 @@ def generate(
         releves_rows = conn.execute(
             """SELECT etudiant_id, seance, heure_debut, heure_fin,
                       presence, autonomie, rigueur, communication, engagement
-               FROM releves WHERE projet_id=?""",
-            (projet_id,),
+               FROM releves WHERE projet_id=? AND seance <= ?""",
+            (projet_id, seance_actuelle),
         ).fetchall()
 
         releves_by_student: dict[int, list[dict]] = {}
