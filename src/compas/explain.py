@@ -114,15 +114,25 @@ def generate_explain(
         "",
         f"**Projet :** {projet_nom}  ",
         f"**Groupe :** {projet_groupe}  ",
-        f"**Coefficient α :** {alpha}  ",
+        f"**Coefficient $\\alpha$ :** {alpha}  ",
         f"**Généré le :** {datetime.now().strftime('%d/%m/%Y à %Hh%M')}  ",
         "",
         "---",
         "",
         "## Formule EMA",
         "",
-        f"> EMA(1) = valeur de la première séance observée  ",
-        f"> EMA(n) = {alpha} × valeur(n) + {one_minus_alpha:.10g} × EMA(n−1)",
+        "La première séance observée initialise directement l'EMA :",
+        "",
+        "$$EMA_1 = v_1$$",
+        "",
+        "Pour chaque séance suivante :",
+        "",
+        "$$EMA_n = \\alpha \\times v_n + (1 - \\alpha) \\times EMA_{n-1}$$",
+        "",
+        f"Avec $\\alpha = {alpha}$, le complément $(1 - \\alpha)$ vaut"
+        f" $1 - {alpha} = {one_minus_alpha:.10g}$.",
+        "C'est le poids accordé à l'historique : plus $\\alpha$ est grand,"
+        " plus les séances récentes priment sur l'historique.",
         "",
         "Les séances sans observation (—) ne modifient pas l'EMA.",
         "",
@@ -153,14 +163,15 @@ def generate_explain(
             elif current_ema is None:
                 current_ema = float(val)
                 lines.append(
-                    f"| S{seance} | {date_str} | {val_str} | initialisation | **{current_ema:.3f}** |"
+                    f"| S{seance} | {date_str} | {val_str}"
+                    f" | $EMA_1 = v_1$ | **{current_ema:.3f}** |"
                 )
             else:
                 prev = current_ema
                 current_ema = alpha * float(val) + one_minus_alpha * prev
                 calcul = (
-                    f"{alpha} × {float(val):.2f} + "
-                    f"{one_minus_alpha:.10g} × {prev:.3f}"
+                    f"${alpha} \\times {float(val):.2f}"
+                    f" + {one_minus_alpha:.10g} \\times {prev:.3f}$"
                 )
                 lines.append(
                     f"| S{seance} | {date_str} | {val_str} | {calcul} | **{current_ema:.3f}** |"
@@ -179,17 +190,32 @@ def generate_explain(
         "",
         "## Récapitulatif",
         "",
-        "| Critère | EMA finale |",
-        "|---------|------------|",
+        "Le score affiché aux étudiants convertit l'EMA (échelle $[-2 ; +2]$)"
+        " en pourcentage entier :",
+        "",
+        "$$\\text{score (\\%)} ="
+        " \\text{arrondi}\\!\\left(\\frac{EMA + 2}{4} \\times 100\\right)$$",
+        "",
+        "Cette formule ramène $-2 \\to 0\\,\\%$,"
+        " $0 \\to 50\\,\\%$ et $+2 \\to 100\\,\\%$.",
+        "",
+        "| Critère | EMA finale | Score affiché |",
+        "|---------|------------|---------------|",
     ]
     for _, short_key, label in _CRITERIA:
         v = final_emas[short_key]
-        lines.append(f"| {label} | {f'{v:.3f}' if v is not None else '—'} |")
+        ema_str = f"{v:.3f}" if v is not None else "—"
+        pct = (
+            f"{round(max(0, min(100, ((v + 2) / 4) * 100))) } %"
+            if v is not None else "—"
+        )
+        lines.append(f"| {label} | {ema_str} | {pct} |")
 
     observed = [v for v in final_emas.values() if v is not None]
     if observed:
         mean = sum(observed) / len(observed)
-        lines.append(f"| **Moyenne** | **{mean:.3f}** |")
+        mean_pct = round(max(0, min(100, ((mean + 2) / 4) * 100)))
+        lines.append(f"| **Moyenne** | **{mean:.3f}** | **{mean_pct} %** |")
         lines.append("")
         rank = compute_rank(final_emas)
         lines.append(f"**Rang final : {_RANK_LABELS.get(rank, rank)}**")

@@ -356,6 +356,26 @@ var COMPAS_DATA = {
 - **Tests** : pytest, un fichier xlsx de fixture dans `tests/fixtures/`
 - **Formatage** : ruff (lint + format)
 
+## Affichage des scores
+
+Les EMA sont calculées en interne sur l'échelle −2/+2, mais **les scores présentés aux étudiants sont toujours des pourcentages entiers** (0 % à 100 %) :
+
+```text
+score_pct = arrondi(((EMA + 2) / 4) × 100)
+```
+
+Exemples de correspondance :
+
+| EMA | Score affiché |
+| --- | ------------- |
+| −2  | 0 %           |
+| −1  | 25 %          |
+|  0  | 50 %          |
+| +1  | 75 %          |
+| +2  | 100 %         |
+
+Cette règle s'applique partout : tooltip du dashboard, rapports, et tout futur document. **Seule la commande `explain` peut afficher les valeurs brutes** (−2/+2 et EMA décimale), car son rôle est précisément d'expliquer comment le score en pourcentage est obtenu.
+
 ## Évolutions prévues
 
 - **Projet Assiduité** : projet frère avec la même stack technique, syntaxe de présence partagée, croisement des données par INE

@@ -413,9 +413,9 @@ function chartHTML(s) {
     var fillStyle = pct === null
       ? 'height:5%; background:var(--bg-bar-track)'
       : 'height:' + pct + '%; background:' + barColor(pct);
-    var tip = v === null
+    var tip = pct === null
       ? criteriaLabels[i] + " : non observé"
-      : criteriaLabels[i] + " : " + v.toFixed(2);
+      : criteriaLabels[i] + " : " + pct + " %";
     html +=
       '<div class="bar-col" title="' + escapeAttr(tip) + '">' +
         '<div class="bar-label">' + criteriaLabels[i] + '</div>' +

@@ -330,6 +330,48 @@ poetry run compas build
 
 Enchaîne l'import et la génération du dashboard. Accepte les mêmes options que `import` et `dashboard`.
 
+#### Expliquer le calcul EMA d'un étudiant
+
+```bash
+poetry run compas explain "Dupont"
+```
+
+Génère un rapport Markdown qui détaille pas à pas le calcul de l'EMA pour chaque critère d'un étudiant. Utile pour justifier un rang auprès de l'étudiant ou vérifier un calcul.
+
+La recherche est insensible à la casse et accepte un fragment de nom :
+
+```bash
+# Fragment suffisant
+poetry run compas explain "dup"
+
+# Nom complet entre guillemets si le nom contient des espaces
+poetry run compas explain "Dupont Arthur"
+```
+
+Si plusieurs étudiants correspondent au fragment, la commande liste les correspondances et s'arrête.
+
+Le rapport est écrit dans `output/explain_<nom>.md` par défaut. Exemple de contenu :
+
+```markdown
+## Autonomie
+
+| Séance | Date       | Valeur | Calcul                    | EMA       |
+| ------ | ---------- | ------ | ------------------------- | --------- |
+| S1     | 15/01/2026 | +1     | initialisation            | **1.000** |
+| S2     | 22/01/2026 | —      | non observé               | 1.000     |
+| S3     | 29/01/2026 | +2     | 0.4 × 2.00 + 0.6 × 1.000 | **1.400** |
+| S4     | 05/02/2026 | 0      | 0.4 × 0.00 + 0.6 × 1.400 | **0.840** |
+
+**EMA finale : 0.840**
+```
+
+| Option | Défaut | Description |
+|--------|--------|-------------|
+| `NOM` | — | Nom ou fragment de nom de l'étudiant |
+| `--db FILE` | `output/compas.db` | Chemin de la base SQLite |
+| `--out FILE` | `output/explain_<nom>.md` | Fichier Markdown de sortie |
+| `--alpha ALPHA` | `0.4` | Coefficient de lissage EMA (entre 0 et 1) |
+
 ---
 
 ### Le dashboard
