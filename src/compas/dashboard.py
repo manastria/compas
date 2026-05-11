@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import sqlite3
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -247,6 +248,45 @@ def _student_data(
     }
 
 
+def _slug(name: str) -> str:
+    """Convertit un nom en slug ASCII pour les noms de fichiers."""
+    norm = unicodedata.normalize("NFD", name.lower())
+    ascii_name = "".join(c for c in norm if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]+", "_", ascii_name).strip("_")
+
+
+def _resolve_projets(
+    conn: sqlite3.Connection, projet_filter: str | None
+) -> list[sqlite3.Row]:
+    """Retourne les projets correspondant au filtre, ou tous si filtre vide.
+
+    Raises:
+        ValueError: Si la base n'a aucun projet, ou si le filtre ne matche rien.
+    """
+    if projet_filter is None:
+        rows = conn.execute(
+            "SELECT id, nom, groupe FROM projets ORDER BY id"
+        ).fetchall()
+        if not rows:
+            raise ValueError("Aucun projet dans la base")
+        return rows
+
+    rows = conn.execute(
+        "SELECT id, nom, groupe FROM projets ORDER BY id"
+    ).fetchall()
+    if not rows:
+        raise ValueError("Aucun projet dans la base")
+    pf = projet_filter.lower()
+    matches = [r for r in rows if pf in r["nom"].lower()]
+    if not matches:
+        noms = sorted(r["nom"] for r in rows)
+        raise ValueError(
+            f"Aucun projet ne correspond à « {projet_filter} ».\n"
+            f"Projets disponibles : {', '.join(noms)}"
+        )
+    return matches
+
+
 def _safe_json(data: object) -> str:
     """Sérialise en JSON sûr pour injection inline dans un tag <script>.
 
@@ -262,8 +302,14 @@ def generate(
     alpha: float = 0.4,
     at_seance: int | None = None,
     at_date: str | None = None,
+    projet: str | None = None,
 ) -> None:
     """Lit la base SQLite, calcule les métriques et génère le dashboard HTML.
+
+    Si `projet` est fourni, filtre par nom de projet (insensible à la casse).
+    Sinon, prend le premier projet de la base (comportement historique).
+    Pour générer un dashboard par projet quand la base en contient plusieurs,
+    utiliser :func:`generate_all_projects`.
 
     Args:
         db_path: Chemin vers la base SQLite existante.
@@ -272,6 +318,7 @@ def generate(
         at_seance: Si fourni, n'inclut que les séances ≤ à ce numéro.
         at_date: Si fourni, n'inclut que les séances dont la date ≤ à cette
             date (format ISO YYYY-MM-DD).
+        projet: Fragment de nom de projet pour filtrer (insensible à la casse).
 
     Raises:
         FileNotFoundError: Si db_path n'existe pas.
@@ -283,18 +330,29 @@ def generate(
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        projet_row = conn.execute(
-            "SELECT id, nom, groupe FROM projets ORDER BY id LIMIT 1"
-        ).fetchone()
-        if not projet_row:
-            raise ValueError("Aucun projet dans la base")
-
+        if projet is not None:
+            projets = _resolve_projets(conn, projet)
+            if len(projets) > 1:
+                noms = ", ".join(p["nom"] for p in projets)
+                raise ValueError(
+                    f"Plusieurs projets correspondent à « {projet} » : {noms}.\n"
+                    "Précisez davantage le nom."
+                )
+            projet_row = projets[0]
+        else:
+            projet_row = conn.execute(
+                "SELECT id, nom, groupe FROM projets ORDER BY id LIMIT 1"
+            ).fetchone()
+            if not projet_row:
+                raise ValueError("Aucun projet dans la base")
+            nb_projets = conn.execute("SELECT COUNT(*) FROM projets").fetchone()[0]
+            if nb_projets > 1:
+                logger.warning(
+                    "Plusieurs projets dans la base — seul « %s » sera affiché"
+                    " (utiliser --projet ou generate_all_projects)",
+                    projet_row["nom"],
+                )
         projet_id = int(projet_row["id"])
-        nb_projets = conn.execute("SELECT COUNT(*) FROM projets").fetchone()[0]
-        if nb_projets > 1:
-            logger.warning(
-                "Plusieurs projets dans la base — seul « %s » sera affiché", projet_row["nom"]
-            )
 
         all_seances = conn.execute(
             "SELECT DISTINCT seance, date FROM releves WHERE projet_id=? ORDER BY seance",
@@ -389,3 +447,61 @@ def generate(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     logger.info("Dashboard généré : %s (%d étudiant(s))", out_path, len(students))
+
+
+def generate_all_projects(
+    db_path: Path,
+    out_path: Path,
+    alpha: float = 0.4,
+    at_seance: int | None = None,
+    at_date: str | None = None,
+) -> list[tuple[str, Path]]:
+    """Génère un dashboard HTML par projet présent dans la base.
+
+    Si la base contient un seul projet, le fichier est écrit à `out_path`
+    (comportement historique). S'il y en a plusieurs, le nom est suffixé
+    avec un slug du nom de projet (ex : ``dashboard_infrastructure.html``).
+
+    Args:
+        db_path: Chemin vers la base SQLite existante.
+        out_path: Chemin de référence (utilisé tel quel si un seul projet,
+            sinon le suffixe ``_<slug>`` est inséré avant l'extension).
+        alpha: Coefficient de lissage EMA (défaut 0.4).
+        at_seance: Si fourni, n'inclut que les séances ≤ à ce numéro.
+        at_date: Si fourni, n'inclut que les séances ≤ à cette date ISO.
+
+    Returns:
+        Liste de tuples (nom_projet, chemin_fichier).
+
+    Raises:
+        FileNotFoundError: Si db_path n'existe pas.
+        ValueError: Si la base ne contient aucun projet.
+    """
+    if not db_path.exists():
+        raise FileNotFoundError(f"Base de données introuvable : {db_path}")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        projets = _resolve_projets(conn, None)
+    finally:
+        conn.close()
+
+    multi = len(projets) > 1
+    written: list[tuple[str, Path]] = []
+    for p in projets:
+        if multi:
+            target = out_path.with_name(
+                f"{out_path.stem}_{_slug(p['nom'])}{out_path.suffix}"
+            )
+        else:
+            target = out_path
+        try:
+            generate(
+                db_path, target, alpha=alpha,
+                at_seance=at_seance, at_date=at_date, projet=p["nom"],
+            )
+            written.append((p["nom"], target))
+        except ValueError as exc:
+            logger.warning("Dashboard ignoré pour « %s » : %s", p["nom"], exc)
+    return written

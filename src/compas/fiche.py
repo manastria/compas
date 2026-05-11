@@ -159,13 +159,19 @@ def compute_student_data(
     db_path: Path,
     etudiant_id: int,
     alpha: float = 0.4,
+    projet_id: int | None = None,
 ) -> dict:
     """Calcule toutes les données d'un étudiant pour sa fiche individuelle.
+
+    Si `projet_id` est fourni, seuls les relevés de ce projet sont pris en
+    compte (EMA, history, presence, events). Sinon les relevés de tous les
+    projets sont agrégés (comportement historique).
 
     Args:
         db_path: Chemin vers la base SQLite existante.
         etudiant_id: Identifiant de l'étudiant dans la table etudiants.
         alpha: Coefficient de lissage EMA (défaut 0.4).
+        projet_id: Identifiant du projet pour filtrer les relevés (None = tous).
 
     Returns:
         Dict structuré pour injection dans le template (COMPAS_FICHE_DATA).
@@ -198,14 +204,24 @@ def compute_student_data(
         ).fetchall()
         projets = [dict(p) for p in projets_rows]
 
-        releves_rows = conn.execute(
-            """SELECT r.*, p.id as projet_id
-               FROM releves r
-               JOIN projets p ON p.id = r.projet_id
-               WHERE r.etudiant_id = ?
-               ORDER BY r.date, r.seance""",
-            (etudiant_id,),
-        ).fetchall()
+        if projet_id is not None:
+            releves_rows = conn.execute(
+                """SELECT r.*, p.id as projet_id
+                   FROM releves r
+                   JOIN projets p ON p.id = r.projet_id
+                   WHERE r.etudiant_id = ? AND r.projet_id = ?
+                   ORDER BY r.date, r.seance""",
+                (etudiant_id, projet_id),
+            ).fetchall()
+        else:
+            releves_rows = conn.execute(
+                """SELECT r.*, p.id as projet_id
+                   FROM releves r
+                   JOIN projets p ON p.id = r.projet_id
+                   WHERE r.etudiant_id = ?
+                   ORDER BY r.date, r.seance""",
+                (etudiant_id,),
+            ).fetchall()
         releves = [dict(r) for r in releves_rows]
     finally:
         conn.close()
@@ -225,8 +241,12 @@ def compute_student_data(
 
     rank = compute_rank(ema_scores)
 
+    # En vue filtrée par projet, on traite comme un mono-projet
+    # (numéros de séance non ambigus, pas de section inter-projets)
+    filtered = projet_id is not None
+    multi = len(projets) > 1 and not filtered
+
     # Historique brut
-    multi = len(projets) > 1
     history = [
         {
             "date": _fmt_short(r["date"]),
@@ -355,26 +375,62 @@ def generate_fiche(student_data: dict, output_path: Path) -> None:
     logger.info("Fiche générée : %s", output_path)
 
 
+def _resolve_projets(
+    conn: sqlite3.Connection, projet_filter: str | None
+) -> list[dict]:
+    """Retourne les projets correspondant au filtre, ou tous si filtre vide.
+
+    Raises:
+        ValueError: Si la base n'a aucun projet, ou si le filtre ne matche rien.
+    """
+    projets = [
+        dict(r) for r in conn.execute(
+            "SELECT id, nom, groupe FROM projets ORDER BY id"
+        ).fetchall()
+    ]
+    if not projets:
+        raise ValueError("Aucun projet dans la base")
+    if projet_filter is None:
+        return projets
+    pf = projet_filter.lower()
+    matches = [p for p in projets if pf in p["nom"].lower()]
+    if not matches:
+        noms = sorted(p["nom"] for p in projets)
+        raise ValueError(
+            f"Aucun projet ne correspond à « {projet_filter} ».\n"
+            f"Projets disponibles : {', '.join(noms)}"
+        )
+    return matches
+
+
 def generate_all_fiches(
     db_path: Path,
     output_dir: Path,
     alpha: float = 0.4,
     name_filter: str | None = None,
+    projet: str | None = None,
 ) -> int:
     """Génère une fiche HTML pour chaque étudiant actif.
+
+    Si la base contient plusieurs projets et qu'aucun filtre `projet` n'est
+    fourni, une sous-arborescence est créée par projet :
+    ``output_dir/<slug_projet>/fiche_<slug_etudiant>.html``. Sinon, les
+    fiches sont écrites directement dans ``output_dir``.
 
     Args:
         db_path: Chemin vers la base SQLite existante.
         output_dir: Dossier de sortie pour les fiches.
         alpha: Coefficient de lissage EMA (défaut 0.4).
         name_filter: Fragment de nom pour filtrer (insensible à la casse).
+        projet: Fragment de nom de projet pour filtrer (insensible à la casse).
 
     Returns:
         Nombre de fiches générées.
 
     Raises:
         FileNotFoundError: Si db_path n'existe pas.
-        ValueError: Si name_filter ne correspond à aucun étudiant actif.
+        ValueError: Si name_filter ne correspond à aucun étudiant actif, ou
+            si `projet` ne correspond à aucun projet de la base.
     """
     if not db_path.exists():
         raise FileNotFoundError(f"Base de données introuvable : {db_path}")
@@ -394,8 +450,17 @@ def generate_all_fiches(
             rows = conn.execute(
                 "SELECT id, nom FROM etudiants WHERE date_depart IS NULL"
             ).fetchall()
+
+        projets = _resolve_projets(conn, projet)
     finally:
         conn.close()
+
+    if projet is not None and len(projets) > 1:
+        noms = ", ".join(p["nom"] for p in projets)
+        raise ValueError(
+            f"Plusieurs projets correspondent à « {projet} » : {noms}.\n"
+            "Précisez davantage le nom."
+        )
 
     etudiants = list(rows)
     if name_filter:
@@ -407,17 +472,38 @@ def generate_all_fiches(
             )
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    count = 0
-    for etudiant in etudiants:
-        eid = int(etudiant["id"])
-        nom = etudiant["nom"]
-        try:
-            data = compute_student_data(db_path, eid, alpha)
-            filename = f"fiche_{_slug(nom)}.html"
-            generate_fiche(data, output_dir / filename)
-            count += 1
-        except Exception as exc:
-            logger.warning("Fiche ignorée pour %s : %s", nom, exc)
 
-    logger.info("Fiches générées : %d/%d dans %s", count, len(etudiants), output_dir)
+    # Décide la stratégie :
+    # - aucun filtre projet et plusieurs projets : sous-dossier par projet
+    # - filtre projet ou un seul projet : fiches directement dans output_dir
+    multi = projet is None and len(projets) > 1
+
+    count = 0
+    for p in projets:
+        pid = int(p["id"])
+        target_dir = (
+            output_dir / _slug(p["nom"]) if multi else output_dir
+        )
+        target_dir.mkdir(parents=True, exist_ok=True)
+        # Si filtre projet ou un seul projet : compute_student_data agrégé
+        # quand projet_id reste None ; sinon on filtre par projet_id.
+        pid_arg: int | None
+        if projet is not None or len(projets) > 1:
+            pid_arg = pid
+        else:
+            pid_arg = None
+        for etudiant in etudiants:
+            eid = int(etudiant["id"])
+            nom = etudiant["nom"]
+            try:
+                data = compute_student_data(db_path, eid, alpha, projet_id=pid_arg)
+                if not data["history"]:
+                    continue
+                filename = f"fiche_{_slug(nom)}.html"
+                generate_fiche(data, target_dir / filename)
+                count += 1
+            except Exception as exc:
+                logger.warning("Fiche ignorée pour %s : %s", nom, exc)
+
+    logger.info("Fiches générées : %d dans %s", count, output_dir)
     return count

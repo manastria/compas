@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +25,13 @@ _RANK_LABELS = {
 }
 
 
+def _slug(name: str) -> str:
+    """Convertit un nom en slug ASCII pour les noms de fichiers."""
+    norm = unicodedata.normalize("NFD", name.lower())
+    ascii_name = "".join(c for c in norm if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]+", "_", ascii_name).strip("_")
+
+
 def _fmt_date(iso: str) -> str:
     try:
         return datetime.strptime(iso, "%Y-%m-%d").strftime("%d/%m/%Y")
@@ -40,76 +49,63 @@ def _ema_to_pct(v: float | None) -> str:
     return f"{round(max(0, min(100, ((v + 2) / 4) * 100))) } %"
 
 
-def generate_explain(
-    db_path: Path,
-    name_query: str,
-    out_path: Path,
-    alpha: float = 0.4,
-) -> str:
-    """Génère un rapport markdown d'explication EMA pour un étudiant.
+def _resolve_projet(
+    conn: sqlite3.Connection, projet_filter: str | None
+) -> list[dict]:
+    """Retourne la liste des projets correspondants (par nom, insensible à la casse).
 
     Args:
-        db_path: Chemin vers la base SQLite existante.
-        name_query: Nom ou fragment de nom de l'étudiant (insensible à la casse).
-        out_path: Chemin du fichier markdown à écrire.
-        alpha: Coefficient de lissage EMA.
+        conn: Connexion SQLite ouverte.
+        projet_filter: Fragment de nom de projet, ou None pour tous les projets.
 
     Returns:
-        Nom réel de l'étudiant trouvé.
+        Liste de dicts {id, nom, groupe}.
 
     Raises:
-        FileNotFoundError: Si db_path n'existe pas.
-        ValueError: Si l'étudiant n'est pas trouvé ou si plusieurs correspondent.
+        ValueError: Si projet_filter ne correspond à aucun projet de la base.
     """
-    if not db_path.exists():
-        raise FileNotFoundError(f"Base de données introuvable : {db_path}")
-
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        etudiants = conn.execute(
-            "SELECT id, nom, anonyme, pseudo FROM etudiants"
+    projets = [
+        dict(r) for r in conn.execute(
+            "SELECT id, nom, groupe FROM projets ORDER BY id"
         ).fetchall()
+    ]
+    if not projets:
+        return []
+    if projet_filter is None:
+        return projets
+    pf = projet_filter.lower()
+    matches = [p for p in projets if pf in p["nom"].lower()]
+    if not matches:
+        noms = sorted(p["nom"] for p in projets)
+        raise ValueError(
+            f"Aucun projet ne correspond à « {projet_filter} ».\n"
+            f"Projets disponibles : {', '.join(noms)}"
+        )
+    return matches
 
-        query_lower = name_query.lower()
-        matches = [e for e in etudiants if query_lower in e["nom"].lower()]
 
-        if not matches:
-            noms = sorted(e["nom"] for e in etudiants)
-            raise ValueError(
-                f"Aucun étudiant ne correspond à « {name_query} ».\n"
-                f"Étudiants disponibles : {', '.join(noms)}"
-            )
-        if len(matches) > 1:
-            noms = [e["nom"] for e in matches]
-            raise ValueError(
-                f"Plusieurs étudiants correspondent à « {name_query} » : {', '.join(noms)}.\n"
-                "Précisez davantage le nom."
-            )
+def _render_explain(
+    etudiant: dict,
+    projet: dict,
+    releves_list: list[dict],
+    alpha: float,
+) -> str:
+    """Construit le contenu markdown d'un rapport explain pour un étudiant et un projet.
 
-        etudiant = dict(matches[0])
-        eid = int(etudiant["id"])
+    Args:
+        etudiant: Dict {id, nom, anonyme, pseudo}.
+        projet: Dict {id, nom, groupe}.
+        releves_list: Relevés de l'étudiant pour ce projet (triés par séance).
+        alpha: Coefficient EMA.
 
-        projet_row = conn.execute(
-            "SELECT nom, groupe FROM projets ORDER BY id LIMIT 1"
-        ).fetchone()
-        projet_nom = projet_row["nom"] if projet_row else "—"
-        projet_groupe = projet_row["groupe"] if projet_row else "—"
-
-        releves = conn.execute(
-            """SELECT seance, date, autonomie, rigueur, communication, engagement
-               FROM releves
-               WHERE etudiant_id = ?
-               ORDER BY seance""",
-            (eid,),
-        ).fetchall()
-        releves_list = [dict(r) for r in releves]
-    finally:
-        conn.close()
-
+    Returns:
+        Contenu markdown.
+    """
     nom = etudiant["nom"]
     pseudo = etudiant.get("pseudo") if etudiant.get("anonyme") else None
     display_name = f"{nom} ({pseudo})" if pseudo else nom
+    projet_nom = projet["nom"]
+    projet_groupe = projet.get("groupe") or "—"
     one_minus_alpha = round(1.0 - alpha, 10)
 
     lines: list[str] = [
@@ -318,8 +314,117 @@ def generate_explain(
 
     lines.append("")
 
-    content = "\n".join(lines)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(content, encoding="utf-8")
+    return "\n".join(lines)
 
-    return nom
+
+def _build_out_path(base: Path, projet_nom: str, multi: bool) -> Path:
+    """Construit le chemin de sortie en suffixant le projet quand multi=True."""
+    if not multi:
+        return base
+    suffix = base.suffix
+    stem = base.stem
+    return base.with_name(f"{stem}_{_slug(projet_nom)}{suffix}")
+
+
+def generate_explain(
+    db_path: Path,
+    name_query: str,
+    out_path: Path,
+    alpha: float = 0.4,
+    projet: str | None = None,
+) -> list[tuple[str, Path]]:
+    """Génère un rapport markdown d'explication EMA pour un étudiant.
+
+    Si l'étudiant participe à plusieurs projets et qu'aucun filtre `projet`
+    n'est fourni, un rapport est écrit par projet en suffixant `out_path`
+    avec le slug du nom de projet.
+
+    Args:
+        db_path: Chemin vers la base SQLite existante.
+        name_query: Nom ou fragment de nom de l'étudiant (insensible à la casse).
+        out_path: Chemin du fichier markdown de sortie (suffixé en multi-projets).
+        alpha: Coefficient de lissage EMA.
+        projet: Fragment de nom de projet pour filtrer (insensible à la casse).
+
+    Returns:
+        Liste de tuples (nom_projet, chemin_fichier) des rapports générés.
+
+    Raises:
+        FileNotFoundError: Si db_path n'existe pas.
+        ValueError: Si l'étudiant n'est pas trouvé, si plusieurs correspondent,
+            si le filtre projet ne correspond à rien, ou si l'étudiant n'a aucun
+            relevé pour les projets retenus.
+    """
+    if not db_path.exists():
+        raise FileNotFoundError(f"Base de données introuvable : {db_path}")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        etudiants = conn.execute(
+            "SELECT id, nom, anonyme, pseudo FROM etudiants"
+        ).fetchall()
+
+        query_lower = name_query.lower()
+        matches = [e for e in etudiants if query_lower in e["nom"].lower()]
+
+        if not matches:
+            noms = sorted(e["nom"] for e in etudiants)
+            raise ValueError(
+                f"Aucun étudiant ne correspond à « {name_query} ».\n"
+                f"Étudiants disponibles : {', '.join(noms)}"
+            )
+        if len(matches) > 1:
+            noms = [e["nom"] for e in matches]
+            raise ValueError(
+                f"Plusieurs étudiants correspondent à « {name_query} » : {', '.join(noms)}.\n"
+                "Précisez davantage le nom."
+            )
+
+        etudiant = dict(matches[0])
+        eid = int(etudiant["id"])
+
+        projets = _resolve_projet(conn, projet)
+        if not projets:
+            raise ValueError("Aucun projet dans la base")
+
+        # Restreindre aux projets où l'étudiant a au moins un relevé
+        projet_ids = [p["id"] for p in projets]
+        placeholders = ",".join("?" for _ in projet_ids)
+        rows = conn.execute(
+            f"""SELECT projet_id, seance, date,
+                       autonomie, rigueur, communication, engagement
+                FROM releves
+                WHERE etudiant_id = ? AND projet_id IN ({placeholders})
+                ORDER BY projet_id, seance""",
+            (eid, *projet_ids),
+        ).fetchall()
+        releves_by_projet: dict[int, list[dict]] = {}
+        for r in rows:
+            releves_by_projet.setdefault(int(r["projet_id"]), []).append(dict(r))
+
+        projets_avec_releves = [p for p in projets if p["id"] in releves_by_projet]
+        if not projets_avec_releves:
+            cible = (
+                f"le projet « {projet} »" if projet
+                else "les projets de la base"
+            )
+            raise ValueError(
+                f"Aucun relevé pour {etudiant['nom']} dans {cible}."
+            )
+    finally:
+        conn.close()
+
+    multi = len(projets_avec_releves) > 1
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    written: list[tuple[str, Path]] = []
+    for projet_row in projets_avec_releves:
+        content = _render_explain(
+            etudiant, projet_row, releves_by_projet[projet_row["id"]], alpha
+        )
+        path = _build_out_path(out_path, projet_row["nom"], multi)
+        path.write_text(content, encoding="utf-8")
+        written.append((projet_row["nom"], path))
+
+    return written

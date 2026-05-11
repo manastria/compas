@@ -98,9 +98,14 @@ def dashboard(
         help="Vue historique : n'inclure que les séances jusqu'à cette date"
              " (JJ/MM/AAAA ou AAAA-MM-JJ)",
     ),
+    projet: str = typer.Option(
+        "", "--projet", metavar="NOM",
+        help="Filtrer par nom de projet (insensible à la casse)."
+             " Sans filtre : un dashboard par projet si la base en contient plusieurs.",
+    ),
 ) -> None:
     """Générer le dashboard HTML."""
-    from compas.dashboard import generate
+    from compas.dashboard import generate, generate_all_projects
 
     cutoff_seance: int | None = at_seance if at_seance > 0 else None
     cutoff_date: str | None = None
@@ -118,15 +123,24 @@ def dashboard(
 
     out_path = Path(out)
     try:
-        generate(Path(db), out_path, alpha=alpha,
-                 at_seance=cutoff_seance, at_date=cutoff_date)
+        if projet:
+            generate(Path(db), out_path, alpha=alpha,
+                     at_seance=cutoff_seance, at_date=cutoff_date,
+                     projet=projet)
+            generated = [(projet, out_path)]
+        else:
+            generated = generate_all_projects(
+                Path(db), out_path, alpha=alpha,
+                at_seance=cutoff_seance, at_date=cutoff_date,
+            )
     except (FileNotFoundError, ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
         raise typer.Exit(1)
 
     if open_browser:
         import webbrowser
-        webbrowser.open(out_path.resolve().as_uri())
+        for _, path in generated:
+            webbrowser.open(path.resolve().as_uri())
 
 
 @app.command()
@@ -164,10 +178,16 @@ def build(
         False, "--skip-fiches",
         help="Ne pas générer les fiches individuelles",
     ),
+    projet: str = typer.Option(
+        "", "--projet", metavar="NOM",
+        help="Filtrer par nom de projet (insensible à la casse)."
+             " Sans filtre : un dashboard et un sous-dossier de fiches par projet"
+             " si la base en contient plusieurs.",
+    ),
 ) -> None:
     """Importer, générer le dashboard et les fiches individuelles."""
     from compas.importer import import_all
-    from compas.dashboard import generate
+    from compas.dashboard import generate, generate_all_projects
 
     cutoff_seance: int | None = at_seance if at_seance > 0 else None
     cutoff_date: str | None = None
@@ -199,21 +219,31 @@ def build(
 
     out_path = Path(out)
     try:
-        generate(Path(db), out_path, alpha=alpha,
-                 at_seance=cutoff_seance, at_date=cutoff_date)
+        if projet:
+            generate(Path(db), out_path, alpha=alpha,
+                     at_seance=cutoff_seance, at_date=cutoff_date,
+                     projet=projet)
+            generated = [(projet, out_path)]
+        else:
+            generated = generate_all_projects(
+                Path(db), out_path, alpha=alpha,
+                at_seance=cutoff_seance, at_date=cutoff_date,
+            )
     except (FileNotFoundError, ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
         raise typer.Exit(1)
 
     if open_browser:
         import webbrowser
-        webbrowser.open(out_path.resolve().as_uri())
+        for _, path in generated:
+            webbrowser.open(path.resolve().as_uri())
 
     if not skip_fiches:
         from compas.fiche import generate_all_fiches
         fiches_dir = Path(out).parent / "fiches"
+        projet_arg = projet if projet else None
         try:
-            generate_all_fiches(Path(db), fiches_dir, alpha=alpha)
+            generate_all_fiches(Path(db), fiches_dir, alpha=alpha, projet=projet_arg)
         except (FileNotFoundError, ValueError, OSError) as exc:
             logging.getLogger(__name__).warning("Fiches ignorées : %s", exc)
 
@@ -236,13 +266,22 @@ def fiches(
         "", "--name", metavar="NOM",
         help="Filtrer par nom ou fragment de nom (insensible à la casse)",
     ),
+    projet: str = typer.Option(
+        "", "--projet", metavar="NOM",
+        help="Filtrer par nom de projet (insensible à la casse)."
+             " Sans filtre : un sous-dossier par projet si la base en contient plusieurs.",
+    ),
 ) -> None:
     """Générer les fiches HTML individuelles par étudiant actif."""
     from compas.fiche import generate_all_fiches
 
     name_filter = name if name else None
+    projet_arg = projet if projet else None
     try:
-        generate_all_fiches(Path(db), Path(out), alpha=alpha, name_filter=name_filter)
+        generate_all_fiches(
+            Path(db), Path(out), alpha=alpha,
+            name_filter=name_filter, projet=projet_arg,
+        )
     except (FileNotFoundError, ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
         raise typer.Exit(1)
@@ -327,11 +366,17 @@ def explain(
     ),
     out: str = typer.Option(
         "", "--out", metavar="FILE",
-        help="Fichier markdown de sortie (défaut : output/explain_<nom>.md)",
+        help="Fichier markdown de sortie (défaut : output/explain_<nom>.md,"
+             " suffixé par projet si l'étudiant en a plusieurs)",
     ),
     alpha: float = typer.Option(
         0.4, "--alpha", metavar="ALPHA",
         help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
+    ),
+    projet: str = typer.Option(
+        "", "--projet", metavar="NOM",
+        help="Filtrer par nom de projet (insensible à la casse)."
+             " Sans filtre : un rapport par projet si l'étudiant en a plusieurs.",
     ),
 ) -> None:
     """Générer un rapport markdown d'explication EMA pour un étudiant."""
@@ -344,13 +389,18 @@ def explain(
         slug = name.lower().replace(" ", "_")
         out_path = Path("output") / f"explain_{slug}.md"
 
+    projet_arg = projet if projet else None
     try:
-        nom = generate_explain(db_path, name, out_path, alpha=alpha)
+        written = generate_explain(
+            db_path, name, out_path, alpha=alpha, projet=projet_arg,
+        )
     except (FileNotFoundError, ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
         raise typer.Exit(1)
 
-    logging.getLogger(__name__).info("Rapport généré pour %s : %s", nom, out_path)
+    log = logging.getLogger(__name__)
+    for projet_nom, path in written:
+        log.info("Rapport généré [%s] : %s", projet_nom, path)
 
 
 def main() -> None:

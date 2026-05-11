@@ -44,6 +44,15 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 - [x] Fiche individuelle par étudiant (historique détaillé)
 - [x] Projet Assiduité (croisement via INE)
 - [ ] Rangs gamifiés (seuils et badges)
+- [ ] **Fiche multi-projets unifiée** (option 2 — non retenue pour l'instant) :
+  remplacer l'EMA globale agrégée par une EMA **par projet** dans la fiche
+  individuelle (`fiche.py`). La fiche présenterait alors une section /
+  onglet par projet (scores, tendances, historique propres à chaque projet),
+  plus une éventuelle vue de synthèse globale clairement marquée. Aujourd'hui
+  l'option 1 a été retenue : `--projet` + génération d'un dashboard et d'un
+  sous-dossier de fiches par projet quand la base en contient plusieurs.
+  Déclencheurs pour réenvisager l'option 2 : besoin d'une vue « 360° » de
+  l'étudiant en entretien individuel, sans avoir à ouvrir N fiches.
 
 ## Hors scope v1 (garde-fous)
 

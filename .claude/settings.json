@@ -4,7 +4,9 @@
       "Bash(poetry env *)",
       "Bash(ls output/compas.db 2>/dev/null && poetry run compas explain \"bousquet\" --out /tmp/test_explain.md && head -120 /tmp/test_explain.md)",
       "Read(//tmp/**)",
-      "Bash(poetry run *)"
+      "Bash(poetry run *)",
+      "Bash(poetry show *)",
+      "Bash(rm -rf /tmp/compas_data /tmp/compas_test*.db /tmp/compas_out*)"
     ],
     "additionalDirectories": [
       "/tmp"
