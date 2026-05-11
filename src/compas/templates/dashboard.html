@@ -217,6 +217,7 @@
       align-items: center;
       flex: 1;
       height: 100%;
+      cursor: help;
     }
 
     .bar-label {
@@ -412,8 +413,11 @@ function chartHTML(s) {
     var fillStyle = pct === null
       ? 'height:5%; background:var(--bg-bar-track)'
       : 'height:' + pct + '%; background:' + barColor(pct);
+    var tip = v === null
+      ? criteriaLabels[i] + " : non observé"
+      : criteriaLabels[i] + " : " + v.toFixed(2);
     html +=
-      '<div class="bar-col">' +
+      '<div class="bar-col" title="' + escapeAttr(tip) + '">' +
         '<div class="bar-label">' + criteriaLabels[i] + '</div>' +
         '<div class="bar-track">' +
           '<div class="bar-fill" style="' + fillStyle + '"></div>' +

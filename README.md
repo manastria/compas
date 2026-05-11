@@ -109,7 +109,68 @@ Vérifier que tout fonctionne :
 poetry run compas --help
 ```
 
-Installer la complétion automatique (bash, zsh ou fish) — à faire une fois :
+---
+
+### Éviter de retaper `poetry run`
+
+Toutes les commandes de ce manuel préfixent `poetry run compas …`. Il existe plusieurs façons de s'en affranchir.
+
+#### Option 1 — Activer l'environnement virtuel (session en cours)
+
+Le venv est créé localement dans `.venv/`. Pour l'activer dans votre terminal :
+
+```bash
+# Bash / Zsh — méthode directe (venv local)
+source .venv/bin/activate
+
+# Ou avec la commande Poetry 2.x (portable quel que soit l'emplacement du venv)
+eval "$(poetry env activate)"
+```
+
+Une fois activé, `compas` est disponible directement :
+
+```bash
+compas build
+compas validate data/
+compas explain "Dupont"
+```
+
+Pour désactiver :
+
+```bash
+deactivate
+```
+
+#### Option 2 — Activation automatique avec direnv
+
+[direnv](https://direnv.net/) active l'environnement dès que vous entrez dans le dossier du projet.
+
+```bash
+# Créer le fichier .envrc à la racine du projet
+echo 'source .venv/bin/activate' > .envrc
+direnv allow
+```
+
+> Nécessite `direnv` installé sur le système (`apt install direnv` / `brew install direnv`).
+
+#### Option 3 — Makefile
+
+Un `Makefile` est fourni avec les commandes courantes. Il s'utilise sans activation préalable :
+
+```bash
+make build      # importer + générer le dashboard (ouvre le navigateur)
+make validate   # valider les fichiers xlsx
+make import     # importer uniquement
+make dashboard  # générer le dashboard uniquement
+```
+
+`make help` liste toutes les cibles disponibles.
+
+---
+
+### Complétion automatique
+
+Installer la complétion pour bash, zsh ou fish — à faire une fois après avoir activé le venv :
 
 ```bash
 compas --install-completion

@@ -215,11 +215,10 @@ def _student_data(
         seance_means.append((r["seance"], sum(vals) / len(vals) if vals else None))
     trend = compute_trend(seance_means, alpha)
 
-    display_name = (
-        etudiant["pseudo"]
-        if etudiant.get("anonyme") and etudiant.get("pseudo")
-        else etudiant["nom"]
-    )
+    if etudiant.get("anonyme"):
+        display_name = etudiant.get("pseudo") or "Étudiant anonyme"
+    else:
+        display_name = etudiant["nom"]
 
     return {
         "name": etudiant["nom"],
@@ -325,8 +324,8 @@ def generate(
     finally:
         conn.close()
 
-    # Tri alphabétique par nom
-    students.sort(key=lambda s: s["name"].casefold())
+    # Tri alphabétique : pseudo pour les anonymes, nom réel sinon
+    students.sort(key=lambda s: s["display_name"].casefold())
 
     compas_data = {
         "projet": projet_row["nom"],

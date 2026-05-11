@@ -212,6 +212,44 @@ def validate(
         raise typer.Exit(1)
 
 
+@app.command()
+def explain(
+    name: str = typer.Argument(
+        ..., metavar="NOM",
+        help="Nom ou fragment de nom de l'étudiant (insensible à la casse)",
+    ),
+    db: str = typer.Option(
+        "output/compas.db", "--db", metavar="FILE",
+        help="Chemin de la base SQLite (défaut : output/compas.db)",
+    ),
+    out: str = typer.Option(
+        "", "--out", metavar="FILE",
+        help="Fichier markdown de sortie (défaut : output/explain_<nom>.md)",
+    ),
+    alpha: float = typer.Option(
+        0.4, "--alpha", metavar="ALPHA",
+        help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
+    ),
+) -> None:
+    """Générer un rapport markdown d'explication EMA pour un étudiant."""
+    from compas.explain import generate_explain
+
+    db_path = Path(db)
+    if out:
+        out_path = Path(out)
+    else:
+        slug = name.lower().replace(" ", "_")
+        out_path = Path("output") / f"explain_{slug}.md"
+
+    try:
+        nom = generate_explain(db_path, name, out_path, alpha=alpha)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        logging.getLogger(__name__).error("%s", exc)
+        raise typer.Exit(1)
+
+    logging.getLogger(__name__).info("Rapport généré pour %s : %s", nom, out_path)
+
+
 def main() -> None:
     """Point d'entrée principal du CLI Compas."""
     app()
