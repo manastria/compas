@@ -24,6 +24,7 @@ packages = [{include = "compas", from = "src"}]
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"
 ruff = ">=0.4"
+faker = ">=25.0"
 
 [tool.ruff]
 line-length = 100
