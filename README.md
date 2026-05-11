@@ -70,12 +70,17 @@ compas/
 │       ├── importer.py         # Lecture xlsx → SQLite
 │       ├── ema.py              # Calcul EMA et tendances
 │       ├── dashboard.py        # Génération HTML
+│       ├── validator.py        # Validation de conformité xlsx
 │       └── templates/
 │           └── dashboard.html  # Template Jinja2
 ├── data/                       # Fichiers xlsx (non versionné)
 ├── output/                     # Fichiers générés (non versionné)
+├── scripts/
+│   └── generate_test_data.py   # Générateur de données de test
 └── tests/
     ├── test_importer.py
+    ├── test_ema.py
+    ├── test_validator.py
     └── fixtures/
         └── test_projet.xlsx
 ```
@@ -125,9 +130,10 @@ Cette feuille décrit le projet et liste les étudiants participants.
 | Colonne | En-tête | Description |
 |---------|---------|-------------|
 | A | Nom | Nom complet de l'étudiant |
-| B | Anonyme | `oui` ou `non` |
-| C | Pseudo | Affiché à la place du nom si anonyme = `oui` |
-| D | Date de départ | Date de fin de participation (`JJ/MM/AAAA`), laisser vide si l'étudiant est toujours actif |
+| B | INE | Identifiant national étudiant — clé de croisement entre projets (colonne masquée à l'impression) |
+| C | Anonyme | `oui` ou `non` |
+| D | Pseudo | Affiché à la place du nom si anonyme = `oui` |
+| E | Date de départ | Date de fin de participation (`JJ/MM/AAAA`), laisser vide si l'étudiant est toujours actif |
 
 La lecture s'arrête à la première ligne dont la colonne A est vide.
 
@@ -144,6 +150,7 @@ Toute feuille dont le nom n'est pas `Config`, `Modele` / `Modèle` ou ne commenc
 | D2 | Date de la séance (`JJ/MM/AAAA`) |
 | F2 | Heure de début (ex. `8h00`) |
 | H2 | Nom de l'enseignant |
+| J2 | Heure de fin (ex. `12h00`) |
 
 La ligne 3 est vide. La ligne 4 contient les en-têtes du tableau. La ligne 5 est réservée au rappel des symboles (ignorée).
 
@@ -159,14 +166,23 @@ La ligne 3 est vide. La ligne 4 contient les en-têtes du tableau. La ligne 5 es
 | F | Engagement | idem |
 | G | Commentaire | Texte libre, optionnel |
 
-**Codes de présence :**
+**Codes de présence** (syntaxe `TYPE:valeur:motif`, combinaisons par virgule) :
 
 | Code | Signification |
 |------|--------------|
-| `P` ou vide | Présent |
-| `A` | Absent |
-| `R15` | Retard de 15 minutes |
-| `9h30` | Arrivée à 9h30 (le retard est calculé depuis l'heure de début de séance) |
+| `P` ou vide | Présent toute la séance |
+| `A` | Absent toute la séance |
+| `A:medical` | Absent avec motif (un mot, sans espace) |
+| `A:9h15-10h00` | Absent sur un créneau horaire (présent sinon) |
+| `A:H1-H2` | Absent sur les créneaux H1 et H2 |
+| `R:15` | Retard de 15 minutes en début de cours |
+| `R:9h30` | Arrivée à 9h30 (retard calculé depuis l'heure de début) |
+| `RR:10` | Retard de 10 minutes après la récréation |
+| `D:10h15` | Départ définitif à 10h15 (présent au début) |
+| `N` | Note sur la feuille papier — consulter le scan |
+| `R:5,RR:10` | Combinaison : retard début + retard après récré |
+
+Chaque token peut recevoir un motif optionnel : `R:9h30:transport`, `D:10h15:medical`.
 
 **Échelle des scores :**
 
@@ -190,6 +206,19 @@ Compas ignore silencieusement les feuilles suivantes :
 ---
 
 ### Commandes CLI
+
+#### Vérifier la conformité des fichiers Excel
+
+```bash
+poetry run compas validate data/
+```
+
+Analyse chaque fichier `.xlsx` et signale les erreurs (bloquantes) et avertissements (non bloquants) : colonnes manquantes, format d'INE incorrect, présence non reconnue, scores hors plage, etc. Code retour `0` si aucune erreur, `1` sinon.
+
+| Option | Description |
+|--------|-------------|
+| `FILE_OR_DIR …` | Un ou plusieurs fichiers `.xlsx` ou dossiers à analyser |
+| `--strict` | Traiter les avertissements comme des erreurs |
 
 #### Importer les fichiers Excel dans la base
 
@@ -217,6 +246,8 @@ Lit la base SQLite, calcule les EMA, tendances et rangs, et écrit le fichier HT
 |--------|--------|-------------|
 | `--db FILE` | `output/compas.db` | Chemin de la base SQLite |
 | `--out FILE` | `output/dashboard.html` | Fichier HTML de sortie |
+| `--alpha ALPHA` | `0.4` | Coefficient de lissage EMA (entre 0 et 1) |
+| `--open` | — | Ouvrir le dashboard dans le navigateur après génération |
 
 #### Tout en une commande
 
@@ -224,7 +255,7 @@ Lit la base SQLite, calcule les EMA, tendances et rangs, et écrit le fichier HT
 poetry run compas build
 ```
 
-Enchaîne l'import et la génération du dashboard.
+Enchaîne l'import et la génération du dashboard. Accepte les mêmes options que `import` et `dashboard`.
 
 ---
 

@@ -51,6 +51,9 @@ compas/
 Deux commandes principales via un unique point d'entrée. Les chemins par défaut sont `data/` pour les xlsx, `output/compas.db` pour la base et `output/dashboard.html` pour le dashboard — les options restent disponibles pour surcharger :
 
 ```bash
+# Vérifier la conformité des fichiers xlsx avant import
+poetry run compas validate data/
+
 # Importer tous les xlsx du dossier data/ dans la base SQLite
 poetry run compas import
 
