@@ -211,11 +211,8 @@ def compute_student_data(
         conn.close()
 
     nom = etudiant["nom"]
-    display_name = (
-        etudiant["pseudo"]
-        if etudiant.get("anonyme") and etudiant.get("pseudo")
-        else nom
-    )
+    pseudo = etudiant.get("pseudo") if etudiant.get("anonyme") else None
+    display_name = nom  # le pseudo est rendu séparément dans le template
     groupe = etudiant.get("groupe") or ""
 
     # EMA et tendance globales (tous projets, séquence par date)
@@ -308,6 +305,7 @@ def compute_student_data(
         "student": {
             "name": nom,
             "display_name": display_name,
+            "pseudo": pseudo,
             "groupe": groupe,
             "rank": rank,
             "presence": _presence_stats(releves),

@@ -42,7 +42,7 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 ## P3 - Évolutions prévues
 
 - [x] Fiche individuelle par étudiant (historique détaillé)
-- [ ] Projet Assiduité (croisement via INE)
+- [x] Projet Assiduité (croisement via INE)
 - [ ] Rangs gamifiés (seuils et badges)
 
 ## Hors scope v1 (garde-fous)

@@ -108,11 +108,8 @@ def generate_explain(
         conn.close()
 
     nom = etudiant["nom"]
-    display_name = (
-        etudiant["pseudo"]
-        if etudiant.get("anonyme") and etudiant.get("pseudo")
-        else nom
-    )
+    pseudo = etudiant.get("pseudo") if etudiant.get("anonyme") else None
+    display_name = f"{nom} ({pseudo})" if pseudo else nom
     one_minus_alpha = round(1.0 - alpha, 10)
 
     lines: list[str] = [

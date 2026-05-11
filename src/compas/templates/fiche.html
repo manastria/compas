@@ -224,7 +224,13 @@ var D = COMPAS_FICHE_DATA;
 var p = D.student.presence;
 
 // En-tête
-document.getElementById("student-name").textContent = D.student.display_name;
+var nameEl = document.getElementById("student-name");
+nameEl.textContent = D.student.display_name;
+if (D.student.pseudo) {
+  var em = document.createElement("em");
+  em.textContent = " (" + D.student.pseudo + ")";
+  nameEl.appendChild(em);
+}
 document.getElementById("header-meta").textContent =
   (D.student.groupe ? "Groupe " + D.student.groupe + " — " : "") + "BTS SIO SISR";
 
