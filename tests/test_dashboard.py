@@ -361,16 +361,15 @@ class TestDashboardHTML:
         names = {s["name"] for s in data["students"]}
         assert {"Dupont Alice", "Martin Bob", "Leclerc Eve"} == names
 
-    def test_students_sorted_by_rank_in_json(self, populated_db, tmp_path):
-        """Le JSON est trié Or → Argent → Bronze → Alerte (le JS consomme cet ordre)."""
+    def test_students_sorted_alphabetically_in_json(self, populated_db, tmp_path):
+        """Le JSON est trié par ordre alphabétique des noms."""
         html = self._html(populated_db, tmp_path)
         data = _extract_compas_json(html)
-        order = {"or": 0, "argent": 1, "bronze": 2, "alerte": 3}
-        ranks = [s["rank"] for s in data["students"]]
-        assert ranks == sorted(ranks, key=lambda r: order.get(r, 99))
+        names = [s["name"] for s in data["students"]]
+        assert names == sorted(names, key=str.casefold)
 
     def test_alice_is_first_in_json(self, populated_db, tmp_path):
-        """Alice (rang Or) est le premier étudiant du tableau JSON."""
+        """Dupont Alice est le premier étudiant du tableau JSON (ordre alphabétique)."""
         html = self._html(populated_db, tmp_path)
         data = _extract_compas_json(html)
         assert data["students"][0]["name"] == "Dupont Alice"

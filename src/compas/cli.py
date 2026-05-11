@@ -1,9 +1,16 @@
 """Point d'entrée CLI pour Compas."""
 
-import argparse
 import logging
 import sys
 from pathlib import Path
+
+import typer
+
+app = typer.Typer(
+    name="compas",
+    help="Évaluation continue des soft skills — BTS SIO SISR",
+    no_args_is_help=True,
+)
 
 
 def _setup_logging(verbose: bool = False) -> None:
@@ -15,54 +22,145 @@ def _setup_logging(verbose: bool = False) -> None:
     )
 
 
-def _cmd_import(args: argparse.Namespace) -> int:
+@app.callback()
+def _callback(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Mode verbeux"),
+) -> None:
+    _setup_logging(verbose)
+
+
+@app.command(name="import")
+def cmd_import(
+    data: str = typer.Option(
+        "data", "--data", metavar="DIR",
+        help="Dossier contenant les fichiers .xlsx (défaut : data/)",
+    ),
+    db: str = typer.Option(
+        "output/compas.db", "--db", metavar="FILE",
+        help="Chemin de la base SQLite (défaut : output/compas.db)",
+    ),
+) -> None:
+    """Importer les fichiers xlsx dans la base SQLite."""
     from compas.importer import import_all
 
-    data_dir = Path(args.data)
+    data_dir = Path(data)
     if not data_dir.exists():
         logging.getLogger(__name__).error("Répertoire introuvable : %s", data_dir)
-        return 1
+        raise typer.Exit(1)
     if not data_dir.is_dir():
         logging.getLogger(__name__).error("N'est pas un répertoire : %s", data_dir)
-        return 1
+        raise typer.Exit(1)
 
     try:
-        import_all(data_dir, Path(args.db))
+        import_all(data_dir, Path(db))
     except (ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
-        return 1
-    return 0
+        raise typer.Exit(1)
 
 
-def _cmd_dashboard(args: argparse.Namespace) -> int:
+@app.command()
+def dashboard(
+    db: str = typer.Option(
+        "output/compas.db", "--db", metavar="FILE",
+        help="Chemin de la base SQLite (défaut : output/compas.db)",
+    ),
+    out: str = typer.Option(
+        "output/dashboard.html", "--out", metavar="FILE",
+        help="Fichier HTML de sortie (défaut : output/dashboard.html)",
+    ),
+    alpha: float = typer.Option(
+        0.4, "--alpha", metavar="ALPHA",
+        help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
+    ),
+    open_browser: bool = typer.Option(
+        False, "--open",
+        help="Ouvrir le dashboard dans le navigateur après génération",
+    ),
+) -> None:
+    """Générer le dashboard HTML."""
     from compas.dashboard import generate
 
-    out = Path(args.out)
+    out_path = Path(out)
     try:
-        generate(Path(args.db), out, alpha=args.alpha)
+        generate(Path(db), out_path, alpha=alpha)
     except (FileNotFoundError, ValueError, OSError) as exc:
         logging.getLogger(__name__).error("%s", exc)
-        return 1
+        raise typer.Exit(1)
 
-    if getattr(args, "open_browser", False):
+    if open_browser:
         import webbrowser
-        webbrowser.open(out.resolve().as_uri())
-
-    return 0
+        webbrowser.open(out_path.resolve().as_uri())
 
 
-def _cmd_build(args: argparse.Namespace) -> int:
-    rc = _cmd_import(args)
-    if rc != 0:
-        return rc
-    return _cmd_dashboard(args)
+@app.command()
+def build(
+    data: str = typer.Option(
+        "data", "--data", metavar="DIR",
+        help="Dossier contenant les fichiers .xlsx (défaut : data/)",
+    ),
+    db: str = typer.Option(
+        "output/compas.db", "--db", metavar="FILE",
+        help="Chemin de la base SQLite (défaut : output/compas.db)",
+    ),
+    out: str = typer.Option(
+        "output/dashboard.html", "--out", metavar="FILE",
+        help="Fichier HTML de sortie (défaut : output/dashboard.html)",
+    ),
+    alpha: float = typer.Option(
+        0.4, "--alpha", metavar="ALPHA",
+        help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
+    ),
+    open_browser: bool = typer.Option(
+        False, "--open",
+        help="Ouvrir le dashboard dans le navigateur après génération",
+    ),
+) -> None:
+    """Importer puis générer le dashboard."""
+    from compas.importer import import_all
+    from compas.dashboard import generate
+
+    data_dir = Path(data)
+    if not data_dir.exists():
+        logging.getLogger(__name__).error("Répertoire introuvable : %s", data_dir)
+        raise typer.Exit(1)
+    if not data_dir.is_dir():
+        logging.getLogger(__name__).error("N'est pas un répertoire : %s", data_dir)
+        raise typer.Exit(1)
+
+    try:
+        import_all(data_dir, Path(db))
+    except (ValueError, OSError) as exc:
+        logging.getLogger(__name__).error("%s", exc)
+        raise typer.Exit(1)
+
+    out_path = Path(out)
+    try:
+        generate(Path(db), out_path, alpha=alpha)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        logging.getLogger(__name__).error("%s", exc)
+        raise typer.Exit(1)
+
+    if open_browser:
+        import webbrowser
+        webbrowser.open(out_path.resolve().as_uri())
 
 
-def _cmd_validate(args: argparse.Namespace) -> int:
+@app.command()
+def validate(
+    paths: list[str] = typer.Argument(
+        ..., metavar="FILE_OR_DIR",
+        help="Fichier(s) .xlsx ou dossier(s) à valider",
+    ),
+    strict: bool = typer.Option(
+        False, "--strict",
+        help="Considérer les avertissements comme des erreurs (code retour 1)",
+    ),
+) -> None:
+    """Vérifier la conformité de fichiers xlsx."""
     from compas.validator import Severity, validate_xlsx
 
     targets: list[Path] = []
-    for path_str in args.paths:
+    for path_str in paths:
         p = Path(path_str)
         if p.is_dir():
             targets.extend(sorted(p.glob("*.xlsx")))
@@ -70,11 +168,11 @@ def _cmd_validate(args: argparse.Namespace) -> int:
             targets.append(p)
         else:
             logging.getLogger(__name__).error("Fichier ou dossier introuvable : %s", p)
-            return 1
+            raise typer.Exit(1)
 
     if not targets:
         logging.getLogger(__name__).warning("Aucun fichier xlsx trouvé.")
-        return 0
+        return
 
     total_errors = 0
     total_warnings = 0
@@ -109,95 +207,14 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         print(f"\nRésumé : {len(targets)} fichier(s) — {summary}")
 
     if total_errors > 0:
-        return 1
-    if getattr(args, "strict", False) and total_warnings > 0:
-        return 1
-    return 0
+        raise typer.Exit(1)
+    if strict and total_warnings > 0:
+        raise typer.Exit(1)
 
 
 def main() -> None:
     """Point d'entrée principal du CLI Compas."""
-    parser = argparse.ArgumentParser(
-        prog="compas",
-        description="Évaluation continue des soft skills — BTS SIO SISR",
-    )
-    parser.add_argument("-v", "--verbose", action="store_true", help="Mode verbeux")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    # ── Sous-commande : import ──────────────────────────────────────────────
-    p_import = sub.add_parser("import", help="Importer les fichiers xlsx dans la base SQLite")
-    p_import.add_argument(
-        "--data", default="data", metavar="DIR",
-        help="Dossier contenant les fichiers .xlsx (défaut : data/)",
-    )
-    p_import.add_argument(
-        "--db", default="output/compas.db", metavar="FILE",
-        help="Chemin de la base SQLite (défaut : output/compas.db)",
-    )
-    p_import.set_defaults(func=_cmd_import)
-
-    # ── Sous-commande : dashboard ───────────────────────────────────────────
-    p_dash = sub.add_parser("dashboard", help="Générer le dashboard HTML")
-    p_dash.add_argument(
-        "--db", default="output/compas.db", metavar="FILE",
-        help="Chemin de la base SQLite (défaut : output/compas.db)",
-    )
-    p_dash.add_argument(
-        "--out", default="output/dashboard.html", metavar="FILE",
-        help="Fichier HTML de sortie (défaut : output/dashboard.html)",
-    )
-    p_dash.add_argument(
-        "--alpha", type=float, default=0.4, metavar="ALPHA",
-        help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
-    )
-    p_dash.add_argument(
-        "--open", dest="open_browser", action="store_true",
-        help="Ouvrir le dashboard dans le navigateur après génération",
-    )
-    p_dash.set_defaults(func=_cmd_dashboard)
-
-    # ── Sous-commande : build (import + dashboard) ──────────────────────────
-    p_build = sub.add_parser("build", help="Importer puis générer le dashboard")
-    p_build.add_argument(
-        "--data", default="data", metavar="DIR",
-        help="Dossier contenant les fichiers .xlsx (défaut : data/)",
-    )
-    p_build.add_argument(
-        "--db", default="output/compas.db", metavar="FILE",
-        help="Chemin de la base SQLite (défaut : output/compas.db)",
-    )
-    p_build.add_argument(
-        "--out", default="output/dashboard.html", metavar="FILE",
-        help="Fichier HTML de sortie (défaut : output/dashboard.html)",
-    )
-    p_build.add_argument(
-        "--alpha", type=float, default=0.4, metavar="ALPHA",
-        help="Coefficient de lissage EMA, entre 0 et 1 (défaut : 0.4)",
-    )
-    p_build.add_argument(
-        "--open", dest="open_browser", action="store_true",
-        help="Ouvrir le dashboard dans le navigateur après génération",
-    )
-    p_build.set_defaults(func=_cmd_build)
-
-    # ── Sous-commande : validate ────────────────────────────────────────────
-    p_val = sub.add_parser("validate", help="Vérifier la conformité de fichiers xlsx")
-    p_val.add_argument(
-        "paths",
-        nargs="+",
-        metavar="FILE_OR_DIR",
-        help="Fichier(s) .xlsx ou dossier(s) à valider",
-    )
-    p_val.add_argument(
-        "--strict",
-        action="store_true",
-        help="Considérer les avertissements comme des erreurs (code retour 1)",
-    )
-    p_val.set_defaults(func=_cmd_validate)
-
-    args = parser.parse_args()
-    _setup_logging(args.verbose)
-    sys.exit(args.func(args))
+    app()
 
 
 if __name__ == "__main__":

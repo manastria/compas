@@ -1,0 +1,159 @@
+
+<style>
+  .pulse-wrap { max-width: 740px; margin: 0 auto; padding: 1.25rem; background: var(--color-background-tertiary); border-radius: var(--border-radius-lg); }
+  .pulse-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; margin-bottom: 10px; }
+  .pulse-bar-track { flex: 1; height: 14px; background: var(--color-background-secondary); border-radius: 7px; overflow: hidden; }
+  .pulse-bar-fill { height: 100%; border-radius: 7px; }
+  .pulse-legend { margin-top: 1rem; padding: 0.75rem 1rem; background: var(--color-background-primary); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); font-size: 12px; color: var(--color-text-secondary); display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+</style>
+
+<div class="pulse-wrap">
+
+<div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px;">
+  <span style="font-size: 18px; font-weight: 500; color: var(--color-text-primary);">Projet &laquo;&nbsp;Infrastructure r&#233;seau PME&nbsp;&raquo;</span>
+  <span style="font-size: 13px; color: var(--color-text-secondary);">S&#233;ance 4 / 6</span>
+</div>
+<p style="font-size: 13px; color: var(--color-text-secondary); margin: 0 0 1.25rem;">BTS SIO SISR &mdash; Groupe TP1 &mdash; Relev&#233; du 27/03/2026</p>
+
+<div id="students"></div>
+
+<div class="pulse-legend">
+  <span style="font-weight: 500; color: var(--color-text-primary);">L&#233;gende&nbsp;:</span>
+  <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #E24B4A;"></span>Insuffisant</span>
+  <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #EF9F27;"></span>&#192; am&#233;liorer</span>
+  <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #BA7517;"></span>Neutre</span>
+  <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #639922;"></span>Bien</span>
+  <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #1D9E75;"></span>Excellent</span>
+  <span style="display: flex; align-items: center; gap: 4px;"><span style="color: #1D9E75;">&#9650;</span> Progression</span>
+  <span style="display: flex; align-items: center; gap: 4px;"><span style="color: #888780;">&#9679;</span> Stable</span>
+  <span style="display: flex; align-items: center; gap: 4px;"><span style="color: #E24B4A;">&#9660;</span> R&#233;gression</span>
+</div>
+</div>
+
+<script>
+var students = [
+  { name: "Dupont A.",  anon: false, auto: 0.6, rig: 0.4, com: 0.8, eng: 0.5, trend: "up", boost: null,
+    pres: { total: 4, present: 4, absent: 0, retards: 0, minRetard: 0 } },
+  { name: "Durand B.",  anon: false, auto: -0.1, rig: 0.2, com: 0.1, eng: -0.4, trend: "down", boost: null,
+    pres: { total: 4, present: 2, absent: 2, retards: 0, minRetard: 0 } },
+  { name: "Martin C.",  anon: false, auto: 0.4, rig: 0.9, com: 0.3, eng: 0.6, trend: "up", boost: "buff",
+    pres: { total: 4, present: 3, absent: 0, retards: 1, minRetard: 15 } },
+  { name: "Bernard L.", anon: false, auto: 0.0, rig: 0.1, com: -0.2, eng: 0.0, trend: "stable", boost: null,
+    pres: { total: 4, present: 4, absent: 0, retards: 0, minRetard: 0 } },
+  { name: "&#201;tudiant anonyme", anon: true, auto: -0.5, rig: -0.4, com: -0.7, eng: -0.6, trend: "down", boost: "debuff",
+    pres: { total: 4, present: 1, absent: 2, retards: 1, minRetard: 30 } },
+  { name: "Leroy T.",   anon: false, auto: 0.95, rig: 0.75, com: 0.9, eng: 0.95, trend: "up", boost: "buff",
+    pres: { total: 4, present: 4, absent: 0, retards: 0, minRetard: 0 } },
+];
+
+var criteria = [
+  { key: "auto", label: "Autonomie" },
+  { key: "rig",  label: "Rigueur" },
+  { key: "com",  label: "Communication" },
+  { key: "eng",  label: "Engagement" },
+];
+
+function scoreToPercent(v) {
+  var clamped = Math.max(-1, Math.min(1, v));
+  return Math.round(((clamped + 1) / 2) * 100);
+}
+
+function barColor(pct) {
+  if (pct <= 20) return "#E24B4A";
+  if (pct <= 40) return "#EF9F27";
+  if (pct <= 60) return "#BA7517";
+  if (pct <= 80) return "#639922";
+  return "#1D9E75";
+}
+
+function rankLabel(avg) {
+  if (avg >= 0.7) return { text: "Or", bg: "#FAEEDA", color: "#854F0B", border: "#FAC775" };
+  if (avg >= 0.25) return { text: "Argent", bg: "#F1EFE8", color: "#5F5E5A", border: "#D3D1C7" };
+  if (avg >= -0.25) return { text: "Bronze", bg: "#FAECE7", color: "#993C1D", border: "#F5C4B3" };
+  return { text: "Alerte", bg: "#FCEBEB", color: "#A32D2D", border: "#F7C1C1" };
+}
+
+function trendArrow(t) {
+  if (t === "up") return '<span style="color: #1D9E75; font-size: 14px;">&#9650;</span>';
+  if (t === "down") return '<span style="color: #E24B4A; font-size: 14px;">&#9660;</span>';
+  return '<span style="color: #888780; font-size: 14px;">&#9679;</span>';
+}
+
+function boostBadge(b) {
+  if (b === "buff") return ' <span style="font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #EAF3DE; color: #3B6D11; border: 0.5px solid #C0DD97; font-weight: 500;">Boost &#8593;</span>';
+  if (b === "debuff") return ' <span style="font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #FCEBEB; color: #A32D2D; border: 0.5px solid #F7C1C1; font-weight: 500;">Alerte &#8595;</span>';
+  return "";
+}
+
+function presenceBlock(p) {
+  var taux = Math.round((p.present / p.total) * 100);
+  var tColor = taux === 100 ? "#0F6E56" : taux >= 75 ? "#854F0B" : "#A32D2D";
+  var tBg = taux === 100 ? "#E1F5EE" : taux >= 75 ? "#FAEEDA" : "#FCEBEB";
+  var tBorder = taux === 100 ? "#9FE1CB" : taux >= 75 ? "#FAC775" : "#F7C1C1";
+
+  var html = '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">';
+  html += '<span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: ' + tBg + '; color: ' + tColor + '; border: 0.5px solid ' + tBorder + ';">' + taux + '&nbsp;%</span>';
+
+  if (p.absent > 0) {
+    html += '<span style="font-size: 11px; color: #A32D2D;">' + p.absent + ' abs.</span>';
+  }
+  if (p.retards > 0) {
+    html += '<span style="font-size: 11px; color: #854F0B;">' + p.retards + ' ret. (' + p.minRetard + '&nbsp;min)</span>';
+  }
+  if (p.absent === 0 && p.retards === 0) {
+    html += '<span style="font-size: 11px; color: #0F6E56;">Assidu</span>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+var container = document.getElementById("students");
+
+students.forEach(function(s) {
+  var vals = criteria.map(function(c) { return s[c.key]; });
+  var avg = vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+  var rank = rankLabel(avg);
+
+  var bars = "";
+  criteria.forEach(function(c) {
+    var v = s[c.key];
+    var pct = scoreToPercent(v);
+    var col = barColor(pct);
+    var sign = v > 0 ? "+" : "";
+    bars += '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">' +
+      '<span style="font-size: 12px; color: var(--color-text-secondary); width: 110px; flex-shrink: 0;">' + c.label + '</span>' +
+      '<div class="pulse-bar-track">' +
+        '<div class="pulse-bar-fill" style="width: ' + pct + '%; background: ' + col + ';"></div>' +
+      '</div>' +
+      '<span style="font-size: 11px; color: var(--color-text-tertiary); min-width: 32px; text-align: right;">' + sign + v.toFixed(1) + '</span>' +
+    '</div>';
+  });
+
+  var nameStyle = 'font-size: 15px; font-weight: 500; color: var(--color-text-primary);';
+  if (s.anon) nameStyle += ' font-style: italic; opacity: 0.7;';
+
+  var card = '<div class="pulse-card">' +
+
+    '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">' +
+      '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+        '<span style="' + nameStyle + '">' + s.name + '</span>' +
+        trendArrow(s.trend) +
+        boostBadge(s.boost) +
+      '</div>' +
+      '<span style="font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: ' + rank.bg + '; color: ' + rank.color + '; border: 0.5px solid ' + rank.border + ';">' + rank.text + '</span>' +
+    '</div>' +
+
+    '<div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 0.5px solid var(--color-border-tertiary);">' +
+      '<div style="display: flex; align-items: center; gap: 8px;">' +
+        '<span style="font-size: 12px; color: var(--color-text-secondary); width: 110px; flex-shrink: 0;">Pr&#233;sence</span>' +
+        presenceBlock(s.pres) +
+      '</div>' +
+    '</div>' +
+
+    bars +
+  '</div>';
+
+  container.insertAdjacentHTML("beforeend", card);
+});
+</script>

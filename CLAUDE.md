@@ -10,6 +10,7 @@ Compas est un outil d'évaluation continue des compétences comportementales (so
 - **openpyxl** : lecture des fichiers `.xlsx`
 - **sqlite3** : base de données (bibliothèque standard)
 - **Jinja2** : moteur de template pour la génération HTML
+- **Typer** : CLI avec complétion automatique des sous-commandes
 - Aucun serveur web, aucun framework — fichiers statiques uniquement
 
 ## Structure du projet
@@ -48,9 +49,14 @@ compas/
 
 ## CLI
 
-Deux commandes principales via un unique point d'entrée. Les chemins par défaut sont `data/` pour les xlsx, `output/compas.db` pour la base et `output/dashboard.html` pour le dashboard — les options restent disponibles pour surcharger :
+Le CLI est construit avec **Typer**. L'option globale `-v / --verbose` se place avant la sous-commande. La complétion automatique s'installe avec `--install-completion`.
+
+Les chemins par défaut sont `data/` pour les xlsx, `output/compas.db` pour la base et `output/dashboard.html` pour le dashboard — les options restent disponibles pour surcharger :
 
 ```bash
+# Installer la complétion automatique (à faire une fois, bash/zsh/fish)
+compas --install-completion
+
 # Vérifier la conformité des fichiers xlsx avant import
 poetry run compas validate data/
 
@@ -63,6 +69,9 @@ poetry run compas dashboard
 # Les deux à la suite (raccourci)
 poetry run compas build
 
+# Mode verbeux (flag global avant la sous-commande)
+poetry run compas -v build
+
 # Exemple avec chemins personnalisés
 poetry run compas build --data autre/dir --db autre/base.db --out autre/out.html
 ```
@@ -70,7 +79,7 @@ poetry run compas build --data autre/dir --db autre/base.db --out autre/out.html
 Le point d'entrée est défini dans `pyproject.toml` :
 
 ```toml
-[tool.poetry.scripts]
+[project.scripts]
 compas = "compas.cli:main"
 ```
 
@@ -305,8 +314,9 @@ Le script `dashboard.py` :
 1. Lit la base SQLite.
 2. Filtre les étudiants actifs (date_depart NULL ou date_depart > date de la dernière séance).
 3. Calcule les EMA, tendances, rangs, statistiques de présence.
-4. Injecte les données dans le template Jinja2 sous forme de JSON dans une balise `<script>`.
-5. Écrit le fichier HTML de sortie.
+4. Trie les étudiants par ordre alphabétique (`name.casefold()`).
+5. Injecte les données dans le template Jinja2 sous forme de JSON dans une balise `<script>`.
+6. Écrit le fichier HTML de sortie.
 
 Le template HTML est celui du dashboard compact (grille responsive, cartes avec histogrammes verticaux). Le JavaScript dans le template lit le JSON et génère les cartes côté client.
 

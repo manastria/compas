@@ -325,8 +325,8 @@ def generate(
     finally:
         conn.close()
 
-    # Tri : Or → Argent → Bronze → Alerte, puis nom alphabétique
-    students.sort(key=lambda s: (_RANK_ORDER.get(s["rank"], 99), s["name"]))
+    # Tri alphabétique par nom
+    students.sort(key=lambda s: s["name"].casefold())
 
     compas_data = {
         "projet": projet_row["nom"],

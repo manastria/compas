@@ -56,6 +56,7 @@ Les scores par séance sont lissés par une **moyenne mobile exponentielle (EMA)
 | [openpyxl](https://openpyxl.readthedocs.io/) | Lecture des fichiers `.xlsx` |
 | sqlite3 | Base de données locale (bibliothèque standard Python) |
 | [Jinja2](https://jinja.palletsprojects.com/) | Génération du template HTML |
+| [Typer](https://typer.tiangolo.com/) | CLI avec complétion automatique |
 
 Aucun serveur web, aucun framework : le résultat est un fichier HTML autonome, lisible hors ligne et projetable directement dans un navigateur.
 
@@ -106,6 +107,12 @@ Vérifier que tout fonctionne :
 
 ```bash
 poetry run compas --help
+```
+
+Installer la complétion automatique (bash, zsh ou fish) — à faire une fois :
+
+```bash
+compas --install-completion
 ```
 
 ---
@@ -186,14 +193,14 @@ Chaque token peut recevoir un motif optionnel : `R:9h30:transport`, `D:10h15:med
 
 **Échelle des scores :**
 
-| Valeur | Interprétation |
-|--------|---------------|
-| `2` | Très au-dessus des attentes |
-| `1` | Au-dessus des attentes |
-| `0` | Conforme aux attentes |
-| `−1` | En dessous des attentes |
-| `−2` | Très en dessous des attentes |
-| vide | Non observé — la séance est ignorée dans le calcul de la moyenne |
+| Symbole papier | Valeur tableur | Interprétation |
+| ------------- | ------------- | -------------- |
+| `++` | `2` | Très au-dessus des attentes |
+| `+` | `1` | Au-dessus des attentes |
+| `=` | `0` | Conforme aux attentes |
+| `-` | `−1` | En dessous des attentes |
+| `--` | `−2` | Très en dessous des attentes |
+| *(rien)* | vide | Non observé — la séance est ignorée dans le calcul de la moyenne |
 
 #### Feuilles ignorées
 
@@ -232,7 +239,12 @@ Lit tous les fichiers `.xlsx` du dossier `data/`, reconstruit la base SQLite et 
 |--------|--------|-------------|
 | `--data DIR` | `data/` | Dossier contenant les fichiers `.xlsx` |
 | `--db FILE` | `output/compas.db` | Chemin de la base SQLite à créer ou recréer |
-| `-v` | — | Mode verbeux (détail de chaque feuille traitée) |
+
+L'option `-v / --verbose` est **globale** et se place avant la sous-commande :
+
+```bash
+poetry run compas -v import
+```
 
 #### Générer le dashboard HTML
 
@@ -263,7 +275,7 @@ Enchaîne l'import et la génération du dashboard. Accepte les mêmes options q
 
 Ouvrir `output/dashboard.html` dans un navigateur — aucun serveur requis.
 
-Le dashboard affiche une **carte par étudiant actif** avec :
+Les cartes sont affichées par **ordre alphabétique**. Le dashboard affiche une **carte par étudiant actif** avec :
 
 - Son nom (ou pseudo si anonyme)
 - Un histogramme vertical des 4 critères (Autonomie, Rigueur, Communication, Engagement) avec la valeur EMA courante
