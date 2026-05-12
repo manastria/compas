@@ -44,13 +44,17 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 - [x] Fiche individuelle par étudiant (historique détaillé)
 - [x] Projet Assiduité (croisement via INE)
 - [ ] Rangs gamifiés (seuils et badges)
-- [ ] **Fiche multi-projets unifiée** (option 2) et **fiche globale par
-  étudiant** : ces deux pistes sont liées et non encore tranchées. Voir le
-  dossier de décision détaillé dans [docs/fiche_multi_projets.md](docs/fiche_multi_projets.md).
-  Aujourd'hui l'option 1 a été retenue : `--projet` + génération d'un
-  dashboard et d'un sous-dossier de fiches par projet quand la base en
-  contient plusieurs. Déclencheurs pour réenvisager : besoin d'une vue
-  « 360° » en entretien individuel ou en conseil de classe sans ouvrir N fiches.
+- [ ] **Fiche globale par étudiant** (évolution A — décision tranchée le
+  2026-05-11, voir [docs/fiche_multi_projets.md](docs/fiche_multi_projets.md)) :
+  - Génération d'une fiche globale supplémentaire au top-level de
+    `output/fiches/` pour les étudiants participant à plusieurs projets.
+  - Badge « Vue globale » dans l'en-tête du template `fiche.html`.
+  - Colonne « Projet » dans le tableau « Détail des séances » de la fiche
+    globale, avec le nom du projet rendu comme lien vers la fiche
+    individuelle de l'étudiant dans ce projet
+    (`./<slug_projet>/fiche_<slug_etudiant>.html`).
+  - L'évolution B (fiche unifiée à onglets / sections empilées) est
+    **abandonnée**.
 
 ## Hors scope v1 (garde-fous)
 
@@ -60,6 +64,22 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 - [ ] Pas d’impact de la présence sur les scores
 
 ## Journal de session
+
+## Session - 2026-05-12
+
+- **Objectif** — Étendre `scripts/git-publish.sh` pour exclure aussi des fichiers et permettre une inspection avant commit.
+- **Réalisé** — Ajout du parsing d'options `--exclude`/`-x` répétable pour exclure fichiers ou répertoires ; ajout de `--stop-before-commit` qui quitte après les exclusions et affiche les commandes pour abandonner la publication puis revenir à `dev` ; conservation du message de publication en argument positionnel.
+- **Vérifications** — `bash -n scripts/git-publish.sh` OK ; `bash scripts/git-publish.sh --help` OK.
+- **Risques/notes** — Le script n'a pas été exécuté en publication réelle pour éviter tout changement de branche/commit/push.
+- **Prochaines actions** — Tester `--stop-before-commit` lors de la prochaine publication réelle avec un fichier exclu.
+
+## Session - 2026-05-11 (P3 — Décision fiche globale multi-projets)
+
+- **Objectif** — Trancher entre les deux pistes documentées dans `docs/fiche_multi_projets.md` (fiche globale vs fiche unifiée à onglets).
+- **Réalisé** — Mise à jour de [docs/fiche_multi_projets.md](docs/fiche_multi_projets.md) : évolution A retenue (fiche globale lisible + badge « Vue globale »), évolution B abandonnée (onglets/sections empilées jugés moins lisibles, surtout à l'impression) ; ajout d'une nouvelle section dédiée à la colonne « Projet » à insérer dans le tableau « Détail des séances » de la fiche globale, avec lien vers `./<slug_projet>/fiche_<slug_etudiant>.html` pour permettre le « zoom » sur une fiche projet ; mise à jour de la rubrique P3 du PROGRESS.md.
+- **Vérifications** — Pas de tests exécutés (changement documentaire uniquement) ; lecture croisée du doc et du PROGRESS.md.
+- **Risques/notes** — Implémentation déléguée à une session ultérieure (Sonnet) ; côté code, `compute_student_data(projet_id=None)` devra propager le projet sur chaque entrée de `history`, et le template `fiche.html` devra conditionner la colonne « Projet » sur un drapeau `is_global` pour ne pas polluer les fiches par projet ; le slug doit rester aligné avec celui de `generate_all_fiches()` pour que les liens tombent juste.
+- **Prochaines actions** — Implémenter la fiche globale + colonne « Projet » avec lien (session ultérieure).
 
 ## Session - 2026-05-11 (P3 — Fiche individuelle par étudiant)
 

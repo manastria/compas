@@ -4,8 +4,14 @@ Ce document détaille deux évolutions candidates de la fiche individuelle
 (`compas fiches`) à envisager quand la base contient plusieurs projets pour
 un même étudiant (typiquement : `Infrastructure réseau PME` + `Assiduité`).
 
-Il sert de référence pour une décision ultérieure. Aucune des deux pistes
-n'est implémentée à ce jour.
+**Décision (2026-05-11)** : l'**évolution A** (fiche globale en complément
+des fiches par projet) est **retenue** ; l'**évolution B** (fiche unifiée à
+onglets) est **abandonnée**. Une fiche globale lisible est préférée à une
+fiche unique compactée par onglets ou par listes empilées. Les fiches par
+projet existantes restent disponibles pour « zoomer » sur un projet.
+
+Voir aussi la section [Colonne Projet dans le tableau des séances](#colonne-projet-dans-le-tableau-des-séances-de-la-fiche-globale)
+pour le seul point d'évolution restant à implémenter.
 
 ## État actuel (rappel)
 
@@ -94,13 +100,60 @@ Le template `fiche.html` actuel marche tel quel :
    classe (« quelle fiche je projette ? »). Une mini-page d'index par
    étudiant listant ses fiches pourrait aider (hors scope ici).
 
-### Décision à prendre
+### Décisions arrêtées (2026-05-11)
 
-- **Implémenter ?** Oui / Non / Plus tard.
-- **Badge « Vue globale » dans le template ?** Oui / Non.
-- **Page d'index par étudiant ?** Hors scope pour l'instant ?
+- **Implémenter ?** **Oui** — retenue comme l'évolution principale.
+- **Badge « Vue globale » dans l'en-tête du template ?** **Oui**.
+- **Page d'index par étudiant ?** **Non**.
+- **Colonne « Projet » dans le tableau « Détail des séances » de la fiche
+  globale, avec lien vers la fiche individuelle du projet** : **Oui** —
+  voir la section dédiée ci-dessous.
 
-## Évolution B — Fiche unifiée multi-projets (option 2 originelle)
+## Colonne Projet dans le tableau des séances de la fiche globale
+
+Sur la fiche globale uniquement (pas les fiches par projet, où l'info serait
+redondante), ajouter une colonne « Projet » dans le tableau « Détail des
+séances ». L'objectif : pouvoir « zoomer » sur la fiche par projet
+correspondant à une séance donnée d'un simple clic.
+
+### Comportement attendu
+
+- La fiche globale liste toutes les séances de l'étudiant, tous projets
+  confondus, triées chronologiquement.
+- Chaque ligne du tableau « Détail des séances » porte une nouvelle colonne
+  « Projet » indiquant le nom du projet de la séance.
+- Le nom du projet est rendu comme un lien hypertexte vers la fiche
+  individuelle de cet étudiant dans ce projet, soit
+  `./<slug_projet>/fiche_<slug_etudiant>.html` (chemin relatif depuis
+  `output/fiches/`).
+- Sur les fiches par projet, le tableau reste inchangé (pas de colonne
+  « Projet », puisque toutes les séances appartiennent au même projet).
+
+### Implications côté données et template
+
+- `compute_student_data(projet_id=None)` doit propager le `projet_id` (et
+  un slug ou nom utilisable comme libellé / pour construire l'URL) sur
+  chaque entrée de `history`.
+- Le slug du projet doit être identique à celui utilisé par
+  `generate_all_fiches()` pour nommer le sous-dossier de la fiche par
+  projet, afin que le lien tombe juste.
+- Le template `fiche.html` doit conditionner l'affichage de la colonne
+  « Projet » sur la présence d'un drapeau « vue globale » dans le JSON
+  (par exemple `is_global: true`), pour éviter de polluer les fiches par
+  projet.
+
+### Limites / questions ouvertes
+
+- Si l'étudiant n'a participé qu'à un seul projet, la fiche globale n'est
+  pas générée (mono-projet = la fiche unique top-level *est* déjà la fiche
+  globale), donc la question ne se pose pas.
+- Si un projet est ultérieurement supprimé de la base mais que la fiche
+  HTML correspondante n'est pas régénérée, les liens vers ce projet
+  pointeraient vers un fichier obsolète. Acceptable : `compas build`
+  régénère toute la sortie, et l'utilisateur reconstruit l'ensemble en une
+  commande.
+
+## Évolution B — Fiche unifiée multi-projets (option 2 originelle, abandonnée)
 
 **Cas d'usage** : on veut **une seule fiche par étudiant**, qui présente
 proprement les données projet par projet à l'intérieur du même document
@@ -160,13 +213,16 @@ sections collapsibles, gérer les graphiques Chart.js par projet).
 3. **Synthèse globale dans l'onglet « Global »** : même question
    d'agrégation cross-projets que pour l'évolution A.
 
-### Décision à prendre
+### Décision arrêtée (2026-05-11)
 
-- **Implémenter ?** Oui / Non / Plus tard.
-- **Onglets ou sections empilées ?** Onglets = plus compact à l'écran,
-  moins pratique à l'impression. Empilées = inverse.
-- **Conserver un onglet « Synthèse globale » ?** = recouvre l'évolution A
-  partiellement.
+- **Implémenter ?** **Non — piste abandonnée.**
+- Raison : on préfère une fiche globale lisible (évolution A) à une fiche
+  unique compactée par onglets ou par sections empilées. Pour « zoomer »
+  sur un projet, les fiches par projet existantes (ouvertes depuis le lien
+  de la colonne « Projet » de la fiche globale) suffisent.
+- Si le besoin réapparaît (par exemple une demande explicite de profil
+  global consultable sans télécharger plusieurs fichiers), cette section
+  reste comme référence pour ré-instruire la décision.
 
 ## Comment elles se recouvrent
 
@@ -180,15 +236,26 @@ sections collapsibles, gérer les graphiques Chart.js par projet).
 | Adapté conseil de classe         | Oui (fiche globale dédiée)  | Oui (onglet « Synthèse »)   |
 | Adapté entretien individuel      | Oui                         | Oui                         |
 
-**Les deux ne sont pas mutuellement exclusives** : on peut implémenter A
-maintenant (très peu cher) et B plus tard si la demande émerge. Si on
-implémente B, la fiche globale d'A devient redondante avec l'onglet
-« Synthèse » de B et peut être supprimée à ce moment-là.
+**Les deux ne sont pas mutuellement exclusives en théorie**, mais en
+pratique la décision retenue est l'évolution A seule. L'évolution B reste
+documentée à titre historique mais n'est plus envisagée à court terme.
 
-## Recommandation
+## Décision retenue (2026-05-11)
 
-Pour le besoin exprimé (conseil de classe, entretien individuel) :
-**évolution A d'abord**. Coût marginal, résultat immédiat, pas de
-régression. Évolution B à garder en réserve si une demande spécifique
-émerge (par exemple « les étudiants veulent voir leur profil global en
-ligne sans télécharger 3 fichiers »).
+**Évolution A retenue, évolution B abandonnée.**
+
+À implémenter :
+
+1. Génération d'une fiche globale supplémentaire par étudiant participant
+   à plusieurs projets, au top-level de `output/fiches/`.
+2. Badge « Vue globale » dans l'en-tête du template `fiche.html` (visible
+   uniquement sur la fiche globale).
+3. Colonne « Projet » dans le tableau « Détail des séances » de la fiche
+   globale, avec le nom du projet rendu comme lien vers la fiche
+   individuelle de l'étudiant dans ce projet
+   (`./<slug_projet>/fiche_<slug_etudiant>.html`).
+
+Non retenu :
+
+- Page d'index par étudiant listant ses fiches.
+- Fiche unifiée à onglets / sections empilées (évolution B).
