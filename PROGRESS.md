@@ -65,6 +65,14 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 
 ## Journal de session
 
+## Session - 2026-05-13
+
+- **Objectif** — Ne pas demander de message de commit quand `scripts/git-publish.sh` est lancé avec `--stop-before-commit` et corriger l'échec sur une branche cible vide.
+- **Réalisé** — Conditionnement de la demande interactive de message à l'absence du mode `STOP_BEFORE_COMMIT` ; nettoyage initial rendu tolérant quand la branche cible ne contient aucun fichier suivi ; nettoyage des résidus non suivis non ignorés sur la branche cible ; nettoyage des résidus ignorés borné aux chemins exclus ; copie depuis la racine Git de la branche source.
+- **Vérifications** — `bash -n scripts/git-publish.sh` OK ; test complet dans un dépôt temporaire `/tmp` avec branche `master` vide, résidu `.agents` non suivi, `.claude/settings.local.json` ignoré et `--stop-before-commit` OK.
+- **Risques/notes** — Le script n'a pas été exécuté en publication réelle dans le dépôt Compas pour éviter changement de branche, commit ou push.
+- **Prochaines actions** — Tester le parcours `--stop-before-commit` lors d'une publication réelle Compas.
+
 ## Session - 2026-05-12
 
 - **Objectif** — Étendre `scripts/git-publish.sh` pour exclure aussi des fichiers et permettre une inspection avant commit.

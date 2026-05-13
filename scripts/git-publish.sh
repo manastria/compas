@@ -92,13 +92,17 @@ git pull origin "$SOURCE_BRANCH" --rebase
 echo "🚀 Publication sur $TARGET_BRANCH..."
 git checkout "$TARGET_BRANCH"
 git pull origin "$TARGET_BRANCH" 2>/dev/null || true
-git rm -rf . --quiet
-git checkout "$SOURCE_BRANCH" -- .
+if [ -n "$(git ls-files)" ]; then
+    git rm -rf . --quiet
+fi
+git clean -fd --quiet
+git checkout "$SOURCE_BRANCH" -- ":/"
 
 # Suppression des chemins de développement
 for path in "${EXCLUDE_PATHS[@]}"; do
     if [ -e "$path" ]; then
-        git rm -rf "$path" --quiet
+        git rm -rf --ignore-unmatch "$path" --quiet
+        git clean -fdx --quiet -- "$path"
         echo "🗑️  Exclu : $path"
     fi
 done
