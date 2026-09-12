@@ -107,6 +107,44 @@ Bonnes pratiques de saisie :
 
 ---
 
+## Générer le dashboard et les fiches avec Docker
+
+Si tu ne veux pas installer Python, pyenv ou Poetry sur ta machine (pratique en particulier sous Windows), Compas peut tourner directement dans un conteneur Docker — seul Docker doit être installé.
+
+### Prérequis
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installé et lancé (Windows/Mac), ou Docker + Docker Compose sous Linux.
+- Le dossier du projet Compas récupéré sur ta machine (il contient déjà le fichier `docker-compose.yml`).
+
+### Commande à retenir
+
+Depuis le dossier du projet, une seule commande importe les fichiers Excel et régénère le dashboard et les fiches :
+
+```bash
+docker compose run --rm dev poetry run compas build
+```
+
+D'autres commandes utiles, à lancer de la même façon :
+
+```bash
+# Vérifier les fichiers Excel avant de les importer
+docker compose run --rm dev poetry run compas validate data/
+
+# Régénérer uniquement le dashboard (sans les fiches)
+docker compose run --rm dev poetry run compas dashboard
+
+# Fiche d'un seul étudiant (fragment de nom, insensible à la casse)
+docker compose run --rm dev poetry run compas fiches --name Dupont
+```
+
+Le dashboard (`output/dashboard.html`) et les fiches (`output/fiches/`) sont générés directement dans le dossier du projet, comme sans Docker — ouvre-les normalement dans le navigateur, il suffit de rafraîchir la page après une régénération.
+
+### Premier lancement plus long
+
+La toute première fois, le conteneur installe Python puis les dépendances du projet : compte quelques minutes. Les lancements suivants sont quasi instantanés.
+
+---
+
 ## Évolutions
 
 Ce guide est un document vivant, complété au fil de la mise en place concrète du projet. Toute évolution de la syntaxe de présence doit être répercutée ici et dans `CLAUDE.md`.
