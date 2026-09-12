@@ -65,6 +65,14 @@ Référence de cadrage: [CLAUDE.md](CLAUDE.md)
 
 ## Journal de session
 
+## Session - 2026-09-12
+
+- **Objectif** — Fournir un environnement de dev conteneurisé (pyenv + Poetry) pour les collègues Windows/Linux, en généralisant la partie « projet Python » à une image réutilisable par tous les projets.
+- **Réalisé** — Image générique `manastria/python-dev` créée dans un dépôt séparé (`~/projets/docker-python-dev/`, hors de compas) : Debian slim + pyenv + Poetry, sans version Python figée ; `entrypoint.sh` lit `.python-version` du projet monté dans `/app`, résout les specs partielles (ex. « 3.12 » → dernier patch disponible via `pyenv install --list`), installe la version manquante puis lance `poetry install` avant d'exécuter la commande demandée. Ajout de `docker-compose.yml` dans compas référençant cette image, avec volumes internes nommés `venv` (→ `/app/.venv`) et `pyenv-versions` (→ `/home/dev/.pyenv/versions`) pour éviter tout binaire compilé incompatible entre hôte et conteneur. Documentation ajoutée dans CLAUDE.md (structure + section dédiée) et README.md (section « Installation avec Docker »).
+- **Vérifications** — `docker build` OK ; `docker compose run --rm dev` testé de bout en bout : installation Python 3.12.14 via pyenv, `poetry install` (18 paquets), `compas --help`, `compas validate data/` et `pytest` (256 passed, 2 échecs préexistants non liés à ce travail, 1 skipped) ; relance après le premier run confirmée quasi instantanée (~4 s, volumes réutilisés) ; propriété des fichiers hôte vérifiée inchangée après les runs conteneurisés.
+- **Risques/notes** — Docker Compose (v5.5.1 testé ici, image construite avec BuildKit/containerd) crée parfois les points de montage des volumes nommés en `root:root` au lieu d'hériter de la propriété `dev` définie dans l'image ; l'entrypoint démarre donc en root, corrige la propriété de `$PYENV_ROOT/versions` et `/app/.venv` si besoin, exporte `HOME=/home/dev`, puis se relance en tant que `dev` via `setpriv` avant toute logique pyenv/Poetry — sans ce correctif, l'installation échoue avec « Permission denied ». L'image `manastria/python-dev` n'a pas été poussée sur Docker Hub (nécessite une confirmation avant publication) ; tant qu'elle ne l'est pas, `docker compose run` ne fonctionne que sur les machines où l'image a été construite localement.
+- **Prochaines actions** — Décider si/quand publier `manastria/python-dev` sur Docker Hub (`docker push`) ; éventuellement dupliquer `docker-python-dev/` dans son propre dépôt Git versionné.
+
 ## Session - 2026-05-13
 
 - **Objectif** — Ne pas demander de message de commit quand `scripts/git-publish.sh` est lancé avec `--stop-before-commit` et corriger l'échec sur une branche cible vide.

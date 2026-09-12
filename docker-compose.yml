@@ -1,0 +1,16 @@
+services:
+  dev:
+    image: manastria/python-dev:latest
+    working_dir: /app
+    environment:
+      POETRY_VIRTUALENVS_IN_PROJECT: "true"
+    volumes:
+      - .:/app
+      - venv:/app/.venv
+      - pyenv-versions:/home/dev/.pyenv/versions
+    tty: true
+    stdin_open: true
+
+volumes:
+  venv:
+  pyenv-versions:

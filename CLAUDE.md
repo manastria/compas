@@ -18,6 +18,7 @@ Compas est un outil d'évaluation continue des compétences comportementales (so
 ```
 compas/
 ├── CLAUDE.md
+├── docker-compose.yml       # Environnement de dev optionnel (pyenv + Poetry conteneurisés)
 ├── pyproject.toml
 ├── README.md
 ├── src/
@@ -50,6 +51,15 @@ compas/
     ├── test_fiche.py
     └── fixtures/
         └── test_projet.xlsx    # Fichier xlsx de test
+```
+
+## Environnement de développement Docker (optionnel)
+
+Pour les collègues qui ne veulent pas installer pyenv/Poetry en local (utile notamment sous Windows), `docker-compose.yml` référence l'image générique `manastria/python-dev` (Dockerfile maintenu hors de ce dépôt, dans un projet séparé, car réutilisée par l'ensemble des projets Python de l'auteur). L'image ne fixe aucune version Python : au démarrage du conteneur, l'entrypoint lit `.python-version`, installe la version correspondante via pyenv si absente, puis lance `poetry install`. Le `.venv` et les versions pyenv sont stockés dans des volumes Docker nommés (pas de bind-mount) pour éviter les binaires compilés incompatibles entre l'hôte et le conteneur.
+
+```bash
+docker compose run --rm dev                       # shell interactif
+docker compose run --rm dev poetry run compas build
 ```
 
 ## CLI

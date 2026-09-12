@@ -117,6 +117,22 @@ poetry run compas --help
 
 ---
 
+### Installation avec Docker (alternative)
+
+Pour éviter d'installer pyenv et Poetry sur la machine (pratique notamment sous Windows), le projet fournit un `docker-compose.yml` basé sur l'image générique [`manastria/python-dev`](https://hub.docker.com/r/manastria/python-dev). Au démarrage du conteneur, elle installe automatiquement la version Python définie dans `.python-version`, puis les dépendances Poetry.
+
+```bash
+# Shell interactif dans le conteneur (premier lancement plus long : compilation
+# de Python + installation des dépendances ; les lancements suivants sont
+# quasi instantanés grâce aux volumes internes venv/pyenv-versions)
+docker compose run --rm dev
+
+# Ou directement une commande
+docker compose run --rm dev poetry run compas --help
+```
+
+---
+
 ### Éviter de retaper `poetry run`
 
 Toutes les commandes de ce manuel préfixent `poetry run compas …`. Il existe plusieurs façons de s'en affranchir.
